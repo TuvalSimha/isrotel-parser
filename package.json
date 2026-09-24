@@ -3,13 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "trigger": "curl -X POST http://localhost:8787/__scheduled?cron=*+*+*+*+*"
+    "check": "node scripts/check-price.js"
   },
-  "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240925.0",
-    "typescript": "^5.5.0",
-    "wrangler": "^3.78.0"
+  "dependencies": {
+    "puppeteer": "^23.0.0"
   }
 }

@@ -59,24 +59,26 @@ async function main() {
     console.log("Loading page...");
     await page.goto(ISROTEL_URL, { waitUntil: "networkidle2", timeout: 60000 });
 
-    // Wait for the room results to load - look for common patterns
+    // Wait for the room results to load
     console.log("Waiting for room content to load...");
 
     // Wait longer for dynamic content
-    await new Promise(r => setTimeout(r, 5000));
+    await new Promise((r) => setTimeout(r, 5000));
 
     // Try waiting for specific elements
     try {
-      await page.waitForSelector('.room-option, .price-value, .room-price, [data-price], .total-price', { timeout: 15000 });
+      await page.waitForSelector(".room-option, .price-value, .room-price, [data-price], .total-price", {
+        timeout: 15000,
+      });
     } catch (e) {
       console.log("Specific selectors not found, trying generic approach...");
     }
 
     // Wait a bit more for any AJAX calls
-    await new Promise(r => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 3000));
 
     // Take a screenshot for debugging
-    await page.screenshot({ path: 'debug-screenshot.png', fullPage: true });
+    await page.screenshot({ path: "debug-screenshot.png", fullPage: true });
     console.log("Screenshot saved as debug-screenshot.png");
 
     // Get full page HTML for debugging
@@ -106,13 +108,18 @@ async function main() {
 
       // Method 2: Look for specific price containers
       const priceSelectors = [
-        '.price', '.room-price', '.total-price', '.price-value',
-        '[class*="price"]', '[class*="Price"]', '[data-price]'
+        ".price",
+        ".room-price",
+        ".total-price",
+        ".price-value",
+        '[class*="price"]',
+        '[class*="Price"]',
+        "[data-price]",
       ];
 
-      priceSelectors.forEach(selector => {
-        document.querySelectorAll(selector).forEach(el => {
-          const text = el.textContent || el.getAttribute('data-price') || '';
+      priceSelectors.forEach((selector) => {
+        document.querySelectorAll(selector).forEach((el) => {
+          const text = el.textContent || el.getAttribute("data-price") || "";
           const match = text.match(/(\d{1,3}(?:,\d{3})*)/);
           if (match) {
             const price = parseInt(match[1].replace(/,/g, ""));
@@ -126,7 +133,7 @@ async function main() {
       // Method 3: Check innerHTML for hidden price data
       const bodyHtml = document.body.innerHTML;
       const htmlMatches = bodyHtml.match(/(\d{1,3},\d{3})\s*₪/g) || [];
-      htmlMatches.forEach(match => {
+      htmlMatches.forEach((match) => {
         const price = parseInt(match.replace(/[,₪\s]/g, ""));
         if (price > 1000 && price < 50000) {
           results.push(price);
@@ -141,9 +148,8 @@ async function main() {
     if (prices.length === 0) {
       console.log("No prices found - check the debug screenshot");
       await sendTelegramMessage(
-        `⚠️ <b>Warning</b>\n\nCouldn't find prices on the page.\nCheck the GitHub Actions artifacts for a screenshot.\n\n🔗 <a href="${ISROTEL_URL}">Check manually</a>`
+        `⚠️ <b>אזהרה</b>\n\nלא הצלחתי למצוא מחירים בעמוד.\nבדוק את הסקרינשוט ב-GitHub Actions.\n\n🔗 <a href="${ISROTEL_URL}">בדוק ידנית</a>`
       );
-      // Don't exit with error - let the workflow complete so we can see the screenshot
       return;
     }
 
@@ -176,13 +182,13 @@ async function main() {
     // First run - notify start
     if (!lastPrice) {
       await sendTelegramMessage(
-        `🏨 <b>Started monitoring!</b>\n\n` +
+        `🏨 <b>התחלתי לעקוב אחרי המחירים!</b>\n\n` +
           `<b>${HOTEL_NAME}</b>\n` +
           `📅 ${DATES}\n\n` +
-          `💰 Site price: <b>${formatPrice(currentPrice.sitePrice)}</b>\n` +
-          `💰 Discount price: <b>${formatPrice(currentPrice.discountPrice)}</b>\n` +
-          `💰 Club price: <b>${formatPrice(currentPrice.clubPrice)}</b>\n\n` +
-          `🔗 <a href="${ISROTEL_URL}">Book now</a>`
+          `💰 מחיר באתר: <b>${formatPrice(currentPrice.sitePrice)}</b>\n` +
+          `💰 מחיר עם הנחה: <b>${formatPrice(currentPrice.discountPrice)}</b>\n` +
+          `💰 מחיר מועדון: <b>${formatPrice(currentPrice.clubPrice)}</b>\n\n` +
+          `🔗 <a href="${ISROTEL_URL}">לעמוד ההזמנה</a>`
       );
       return;
     }
@@ -194,7 +200,7 @@ async function main() {
       const diff = currentPrice.sitePrice - lastPrice.sitePrice;
       const emoji = diff > 0 ? "📈" : "📉";
       changes.push(
-        `${emoji} Site price: <b>${formatPrice(currentPrice.sitePrice)}</b> (was: <s>${formatPrice(lastPrice.sitePrice)}</s>, ${formatDiff(diff)})`
+        `${emoji} מחיר באתר: <b>${formatPrice(currentPrice.sitePrice)}</b> (היה: <s>${formatPrice(lastPrice.sitePrice)}</s>, ${formatDiff(diff)})`
       );
     }
 
@@ -202,7 +208,7 @@ async function main() {
       const diff = currentPrice.discountPrice - lastPrice.discountPrice;
       const emoji = diff > 0 ? "📈" : "📉";
       changes.push(
-        `${emoji} Discount price: <b>${formatPrice(currentPrice.discountPrice)}</b> (was: <s>${formatPrice(lastPrice.discountPrice)}</s>, ${formatDiff(diff)})`
+        `${emoji} מחיר עם הנחה: <b>${formatPrice(currentPrice.discountPrice)}</b> (היה: <s>${formatPrice(lastPrice.discountPrice)}</s>, ${formatDiff(diff)})`
       );
     }
 
@@ -210,18 +216,18 @@ async function main() {
       const diff = currentPrice.clubPrice - lastPrice.clubPrice;
       const emoji = diff > 0 ? "📈" : "📉";
       changes.push(
-        `${emoji} Club price: <b>${formatPrice(currentPrice.clubPrice)}</b> (was: <s>${formatPrice(lastPrice.clubPrice)}</s>, ${formatDiff(diff)})`
+        `${emoji} מחיר מועדון: <b>${formatPrice(currentPrice.clubPrice)}</b> (היה: <s>${formatPrice(lastPrice.clubPrice)}</s>, ${formatDiff(diff)})`
       );
     }
 
     if (changes.length > 0) {
       await sendTelegramMessage(
-        `🚨 <b>Price changed!</b>\n\n` +
+        `🚨 <b>שינוי מחיר!</b>\n\n` +
           `<b>${HOTEL_NAME}</b>\n` +
           `📅 ${DATES}\n\n` +
           changes.join("\n") +
           `\n\n⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}\n` +
-          `🔗 <a href="${ISROTEL_URL}">Book now</a>`
+          `🔗 <a href="${ISROTEL_URL}">להזמנה</a>`
       );
       console.log("Price change notification sent!");
     } else {

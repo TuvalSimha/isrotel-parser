@@ -245,74 +245,107 @@ function compareSearchResults(current, previous) {
   return changes;
 }
 
-function buildChangeMessage(dates, url, changes) {
-  let msg = `🚨 <b>שינוי מחיר!</b>\n\n`;
-  msg += `🏨 <b>${HOTEL_NAME}</b>\n`;
-  msg += `📅 ${dates}\n\n`;
+function buildChangeMessage(dates, url, changes, currentRooms) {
+  let msg = `🔔 <b>היי! יש שינוי במחיר!</b>\n\n`;
+  msg += `🏨 מלון <b>${HOTEL_NAME}</b>\n`;
+  msg += `📅 תאריכים: <b>${dates}</b>\n`;
+  msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const change of changes) {
+    const currentRoom = currentRooms.find(r => r.name === change.roomName);
+
     if (change.type === "new") {
-      msg += `🆕 <b>${change.roomName}</b>\n`;
-      msg += `   מחיר מועדון: ${formatPrice(change.current.clubPrice)}\n\n`;
+      msg += `🆕 <b>${change.roomName}</b> (חדר חדש!)\n`;
+      if (currentRoom) {
+        msg += `   💵 מחיר באתר: ${formatPrice(currentRoom.sitePrice)}\n`;
+        msg += `   🏷️ עם הנחה: ${formatPrice(currentRoom.discountPrice)}\n`;
+        msg += `   ⭐ מועדון: <b>${formatPrice(currentRoom.clubPrice)}</b>\n`;
+      }
+      msg += "\n";
     } else {
-      msg += `<b>${change.roomName}</b>\n`;
+      msg += `🛏️ <b>${change.roomName}</b>\n\n`;
+
       for (const pc of change.priceChanges) {
-        const emoji = pc.diff > 0 ? "📈" : "📉";
-        msg += `${emoji} ${pc.label}: <b>${formatPrice(pc.current)}</b> (היה: <s>${formatPrice(pc.previous)}</s>, ${formatDiff(pc.diff)})\n`;
+        const emoji = pc.diff > 0 ? "📈 עלה" : "📉 ירד";
+        const diffEmoji = pc.diff > 0 ? "🔺" : "🔻";
+        msg += `${emoji}: ${pc.label}\n`;
+        msg += `   לפני: <s>${formatPrice(pc.previous)}</s>\n`;
+        msg += `   עכשיו: <b>${formatPrice(pc.current)}</b> ${diffEmoji} ${formatDiff(pc.diff)}\n\n`;
+      }
+
+      // Show all current prices
+      if (currentRoom) {
+        msg += `📊 כל המחירים העדכניים:\n`;
+        msg += `   💵 באתר: ${formatPrice(currentRoom.sitePrice)}\n`;
+        msg += `   🏷️ עם הנחה: ${formatPrice(currentRoom.discountPrice)}\n`;
+        msg += `   ⭐ מועדון: <b>${formatPrice(currentRoom.clubPrice)}</b>\n`;
       }
       msg += "\n";
     }
   }
 
+  msg += `━━━━━━━━━━━━━━━\n`;
   msg += `⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}\n`;
-  msg += `🔗 <a href="${url}">להזמנה</a>`;
+  msg += `👉 <a href="${url}">לחצו כאן להזמנה</a>`;
 
   return msg;
 }
 
 function buildStatusMessage(results) {
-  let msg = `✅ <b>סטטוס מחירים - ${HOTEL_NAME}</b>\n\n`;
+  let msg = `👋 <b>היי! הנה סטטוס המחירים</b>\n\n`;
+  msg += `🏨 מלון <b>${HOTEL_NAME}</b>\n`;
+  msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const result of results) {
     msg += `📅 <b>${result.dates}</b>\n`;
 
     if (result.rooms.length === 0) {
-      msg += `   ⚠️ לא נמצאו חדרים\n\n`;
+      msg += `   ⚠️ לא נמצאו חדרים זמינים\n\n`;
       continue;
     }
 
     for (const room of result.rooms) {
-      msg += `   <b>${room.name}</b>\n`;
-      msg += `   💰 מועדון: ${formatPrice(room.clubPrice)}\n`;
+      msg += `\n🛏️ <b>${room.name}</b>\n`;
+      msg += `   💵 מחיר באתר: ${formatPrice(room.sitePrice)}\n`;
+      msg += `   🏷️ עם הנחה (5%): ${formatPrice(room.discountPrice)}\n`;
+      msg += `   ⭐ מחיר מועדון: <b>${formatPrice(room.clubPrice)}</b>\n`;
     }
-    msg += "\n";
+    msg += `\n🔗 <a href="${result.url}">להזמנה</a>\n`;
+    msg += `━━━━━━━━━━━━━━━\n\n`;
   }
 
+  msg += `✅ אין שינוי מהבדיקה הקודמת\n`;
   msg += `⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}`;
 
   return msg;
 }
 
 function buildFirstRunMessage(results) {
-  let msg = `🏨 <b>התחלתי לעקוב אחרי המחירים!</b>\n\n`;
-  msg += `<b>${HOTEL_NAME}</b>\n\n`;
+  let msg = `🎉 <b>שלום! התחלתי לעקוב אחרי המחירים עבורך!</b>\n\n`;
+  msg += `🏨 מלון <b>${HOTEL_NAME}</b>\n`;
+  msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const result of results) {
     msg += `📅 <b>${result.dates}</b>\n`;
 
     if (result.rooms.length === 0) {
-      msg += `   ⚠️ לא נמצאו חדרים\n\n`;
+      msg += `   ⚠️ לא נמצאו חדרים זמינים\n\n`;
       continue;
     }
 
     for (const room of result.rooms) {
-      msg += `   <b>${room.name}</b>\n`;
-      msg += `   💰 באתר: ${formatPrice(room.sitePrice)} → הנחה: ${formatPrice(room.discountPrice)} → מועדון: ${formatPrice(room.clubPrice)}\n`;
+      msg += `\n🛏️ <b>${room.name}</b>\n`;
+      msg += `   💵 מחיר באתר: ${formatPrice(room.sitePrice)}\n`;
+      msg += `   🏷️ עם הנחה (5%): ${formatPrice(room.discountPrice)}\n`;
+      msg += `   ⭐ מחיר מועדון: <b>${formatPrice(room.clubPrice)}</b>\n`;
     }
-    msg += "\n";
+    msg += `\n🔗 <a href="${result.url}">להזמנה</a>\n`;
+    msg += `━━━━━━━━━━━━━━━\n\n`;
   }
 
-  msg += `🔄 בודק כל 15 דקות`;
+  msg += `🔄 אני בודק את המחירים כל 15 דקות\n`;
+  msg += `📬 אשלח לך הודעה ברגע שיהיה שינוי!\n\n`;
+  msg += `💡 <i>טיפ: אפשר להפעיל אותי ידנית מתי שתרצה לראות את המחירים העדכניים</i>`;
 
   return msg;
 }
@@ -366,7 +399,7 @@ async function main() {
 
       if (changes.length > 0) {
         hasChanges = true;
-        const msg = buildChangeMessage(result.dates, result.url, changes);
+        const msg = buildChangeMessage(result.dates, result.url, changes, result.rooms);
         await sendTelegramMessage(msg);
         console.log(`Sent change notification for ${result.dates}`);
       }

@@ -52,3 +52,4 @@ jobs:
         with:
           path: last_prices.json
           key: isrotel-price-${{ github.run_id }}
+# Trigger scheduled runs

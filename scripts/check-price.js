@@ -59,23 +59,40 @@ async function main() {
     console.log("Loading page...");
     await page.goto(ISROTEL_URL, { waitUntil: "networkidle2", timeout: 60000 });
 
-    // Wait for price elements to load
-    console.log("Waiting for prices to load...");
-    await page.waitForFunction(
-      () => {
-        const priceElements = document.querySelectorAll('[class*="price"], [class*="Price"]');
-        return priceElements.length > 0;
-      },
-      { timeout: 30000 }
-    );
+    // Wait for the room results to load - look for common patterns
+    console.log("Waiting for room content to load...");
+
+    // Wait longer for dynamic content
+    await new Promise(r => setTimeout(r, 5000));
+
+    // Try waiting for specific elements
+    try {
+      await page.waitForSelector('.room-option, .price-value, .room-price, [data-price], .total-price', { timeout: 15000 });
+    } catch (e) {
+      console.log("Specific selectors not found, trying generic approach...");
+    }
+
+    // Wait a bit more for any AJAX calls
+    await new Promise(r => setTimeout(r, 3000));
+
+    // Take a screenshot for debugging
+    await page.screenshot({ path: 'debug-screenshot.png', fullPage: true });
+    console.log("Screenshot saved as debug-screenshot.png");
+
+    // Get full page HTML for debugging
+    const pageContent = await page.content();
+    console.log("Page length:", pageContent.length);
+
+    // Search for price patterns in the full HTML
+    const htmlPriceMatches = pageContent.match(/(\d{1,3}(?:,\d{3})+)\s*₪/g) || [];
+    console.log("Prices found in HTML:", htmlPriceMatches.slice(0, 10));
 
     // Extract prices from the page
     const prices = await page.evaluate(() => {
       const results = [];
 
-      // Find all text containing prices (format: X,XXX ₪)
+      // Method 1: Find all text containing prices (format: X,XXX ₪)
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-
       while (walker.nextNode()) {
         const text = walker.currentNode.textContent.trim();
         const match = text.match(/(\d{1,3}(?:,\d{3})*)\s*₪/);
@@ -87,16 +104,47 @@ async function main() {
         }
       }
 
+      // Method 2: Look for specific price containers
+      const priceSelectors = [
+        '.price', '.room-price', '.total-price', '.price-value',
+        '[class*="price"]', '[class*="Price"]', '[data-price]'
+      ];
+
+      priceSelectors.forEach(selector => {
+        document.querySelectorAll(selector).forEach(el => {
+          const text = el.textContent || el.getAttribute('data-price') || '';
+          const match = text.match(/(\d{1,3}(?:,\d{3})*)/);
+          if (match) {
+            const price = parseInt(match[1].replace(/,/g, ""));
+            if (price > 1000 && price < 50000) {
+              results.push(price);
+            }
+          }
+        });
+      });
+
+      // Method 3: Check innerHTML for hidden price data
+      const bodyHtml = document.body.innerHTML;
+      const htmlMatches = bodyHtml.match(/(\d{1,3},\d{3})\s*₪/g) || [];
+      htmlMatches.forEach(match => {
+        const price = parseInt(match.replace(/[,₪\s]/g, ""));
+        if (price > 1000 && price < 50000) {
+          results.push(price);
+        }
+      });
+
       return [...new Set(results)].sort((a, b) => b - a);
     });
 
     console.log("Found prices:", prices);
 
     if (prices.length === 0) {
+      console.log("No prices found - check the debug screenshot");
       await sendTelegramMessage(
-        `⚠️ <b>Warning</b>\n\nCouldn't find prices on the page.\nThe page structure may have changed.\n\n🔗 <a href="${ISROTEL_URL}">Check manually</a>`
+        `⚠️ <b>Warning</b>\n\nCouldn't find prices on the page.\nCheck the GitHub Actions artifacts for a screenshot.\n\n🔗 <a href="${ISROTEL_URL}">Check manually</a>`
       );
-      process.exit(1);
+      // Don't exit with error - let the workflow complete so we can see the screenshot
+      return;
     }
 
     const currentPrice = {

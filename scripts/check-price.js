@@ -62,9 +62,9 @@ async function extractRoomsFromPage(page) {
   const html = await page.content();
 
   // Debug: Show sample of HTML around price area
-  const priceAreaMatch = html.match(/מחיר[^]*?{0,500}/);
-  if (priceAreaMatch) {
-    console.log("Sample HTML near 'מחיר':", priceAreaMatch[0].substring(0, 300));
+  const priceIndex = html.indexOf("מחיר");
+  if (priceIndex > -1) {
+    console.log("Sample HTML near 'מחיר':", html.substring(priceIndex, priceIndex + 500));
   }
 
   // Find all prices - try multiple patterns

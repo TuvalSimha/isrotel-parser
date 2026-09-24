@@ -1,19 +1,12 @@
 name: Check Isrotel Price
-
 on:
   schedule:
-    # Run every 15 minutes at random offset (7, 22, 37, 52) to avoid peak times
-    - cron: "7,22,37,52 * * * *"
-  workflow_dispatch: # Allow manual trigger
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/check-price.yml'
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
 
 jobs:
   check-price:
-    runs-on: ubuntu-latest
-
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -21,7 +14,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
 
       - name: Install Puppeteer
         run: npm install puppeteer

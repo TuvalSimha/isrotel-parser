@@ -100,12 +100,14 @@ async function extractRoomsFromPage(page) {
 
   console.log("All prices found:", allPrices);
 
-  // Find room names
-  const roomNamePattern = /(חדר קדמא[^<\n]*|סטודיו קדמא[^<\n]*)/g;
+  // Find room names - clean version
+  const roomNamePattern = /(חדר קדמא[^"<\n]*|סטודיו קדמא[^"<\n]*)/g;
   const roomNames = [];
   while ((match = roomNamePattern.exec(html)) !== null) {
-    const name = match[1].trim();
-    if (name.length < 50 && !roomNames.includes(name)) {
+    let name = match[1].trim();
+    // Clean up any HTML artifacts
+    name = name.replace(/["<>]/g, "").trim();
+    if (name.length > 5 && name.length < 50 && !roomNames.includes(name)) {
       roomNames.push(name);
     }
   }

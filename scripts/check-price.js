@@ -1,10 +1,27 @@
 const puppeteer = require("puppeteer");
+const fs = require("fs");
 
-const ISROTEL_URL =
-  "https://www.isrotel.co.il/searchresult/%D7%97%D7%93%D7%A8-%D7%91%D7%9E%D7%9C%D7%95%D7%9F/?SearchQuery=KD/25-09-2026/27-09-2026/2-0-1/-1/r17008";
+// Configuration - Add your date ranges here
+const SEARCHES = [
+  {
+    id: "25-27-sep",
+    dates: "25-27/09/2026",
+    url: "https://www.isrotel.co.il/searchresult/%D7%97%D7%93%D7%A8-%D7%91%D7%9E%D7%9C%D7%95%D7%9F/?SearchQuery=KD/25-09-2026/27-09-2026/2-0-1/-1/r17008",
+  },
+  {
+    id: "28-30-sep",
+    dates: "28-30/09/2026",
+    url: "https://www.isrotel.co.il/searchresult/%D7%97%D7%93%D7%A8-%D7%91%D7%9E%D7%9C%D7%95%D7%9F/?SearchQuery=KD/28-09-2026/30-09-2026/2-0-1/-1",
+  },
+  {
+    id: "29-sep-01-oct",
+    dates: "29/09-01/10/2026",
+    url: "https://www.isrotel.co.il/searchresult/%D7%97%D7%93%D7%A8-%D7%91%D7%9E%D7%9C%D7%95%D7%9F/?SearchQuery=KD/29-09-2026/01-10-2026/2-0-1/-1",
+  },
+];
 
-const HOTEL_NAME = "קדמא - חדר עם מרפסת ודלת מקשרת";
-const DATES = "25-27/09/2026";
+const HOTEL_NAME = "קדמא";
+const PRICE_FILE = "last_prices.json";
 
 async function sendTelegramMessage(message) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -40,6 +57,244 @@ function formatDiff(diff) {
   return `${sign}${diff.toLocaleString("he-IL")} ₪`;
 }
 
+async function extractRoomsFromPage(page) {
+  return await page.evaluate(() => {
+    const rooms = [];
+
+    // Find all room option sections
+    const roomSections = document.querySelectorAll('[class*="room"], [class*="option"], .card, article');
+
+    // Try to find room titles and their associated prices
+    const allText = document.body.innerText;
+
+    // Split by room patterns
+    const roomPattern = /(חדר קדמא[^\n]*|סטודיו קדמא[^\n]*)/g;
+    const roomMatches = allText.match(roomPattern) || [];
+
+    // Find all prices in format X,XXX ₪
+    const pricePattern = /(\d{1,3}(?:,\d{3})+)\s*₪/g;
+    const allPrices = [];
+    let match;
+    while ((match = pricePattern.exec(allText)) !== null) {
+      const price = parseInt(match[1].replace(/,/g, ""));
+      if (price > 1000 && price < 50000) {
+        allPrices.push(price);
+      }
+    }
+
+    // Group prices by 3 (site price, discount price, club price)
+    // Each room has 3 prices displayed
+    const uniqueRoomNames = [...new Set(roomMatches)].filter(
+      (name) => name.includes("חדר") || name.includes("סטודיו")
+    );
+
+    // Get unique prices and sort descending
+    const uniquePrices = [...new Set(allPrices)].sort((a, b) => b - a);
+
+    // Try to match rooms with their prices
+    // Prices appear in groups of 3 for each room
+    for (let i = 0; i < uniqueRoomNames.length && i * 3 < uniquePrices.length; i++) {
+      const roomName = uniqueRoomNames[i].trim();
+      const priceIndex = i * 3;
+
+      if (priceIndex + 2 < uniquePrices.length) {
+        rooms.push({
+          name: roomName,
+          sitePrice: uniquePrices[priceIndex],
+          discountPrice: uniquePrices[priceIndex + 1],
+          clubPrice: uniquePrices[priceIndex + 2],
+        });
+      }
+    }
+
+    // Fallback: if no rooms found, just return all prices grouped
+    if (rooms.length === 0 && uniquePrices.length >= 3) {
+      for (let i = 0; i * 3 + 2 < uniquePrices.length; i++) {
+        rooms.push({
+          name: `חדר אפשרות ${i + 1}`,
+          sitePrice: uniquePrices[i * 3],
+          discountPrice: uniquePrices[i * 3 + 1],
+          clubPrice: uniquePrices[i * 3 + 2],
+        });
+      }
+    }
+
+    return rooms;
+  });
+}
+
+async function checkSearch(browser, search) {
+  console.log(`\nChecking ${search.dates}...`);
+
+  const page = await browser.newPage();
+
+  await page.setExtraHTTPHeaders({
+    "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
+  });
+
+  try {
+    await page.goto(search.url, { waitUntil: "networkidle2", timeout: 60000 });
+
+    // Wait for content to load
+    await new Promise((r) => setTimeout(r, 5000));
+
+    try {
+      await page.waitForSelector('[class*="room"], [class*="price"], .card', { timeout: 15000 });
+    } catch (e) {
+      console.log("Waiting for generic content...");
+    }
+
+    await new Promise((r) => setTimeout(r, 3000));
+
+    // Extract rooms and prices
+    const rooms = await extractRoomsFromPage(page);
+    console.log(`Found ${rooms.length} rooms for ${search.dates}:`, rooms);
+
+    return {
+      id: search.id,
+      dates: search.dates,
+      url: search.url,
+      rooms: rooms,
+      timestamp: new Date().toISOString(),
+    };
+  } finally {
+    await page.close();
+  }
+}
+
+function compareSearchResults(current, previous) {
+  const changes = [];
+
+  if (!previous) return changes;
+
+  const prevRoomsMap = new Map(previous.rooms.map((r) => [r.name, r]));
+
+  for (const room of current.rooms) {
+    const prevRoom = prevRoomsMap.get(room.name);
+
+    if (!prevRoom) {
+      // New room appeared
+      changes.push({
+        roomName: room.name,
+        type: "new",
+        current: room,
+      });
+      continue;
+    }
+
+    const roomChanges = [];
+
+    if (room.sitePrice !== prevRoom.sitePrice) {
+      roomChanges.push({
+        label: "מחיר באתר",
+        current: room.sitePrice,
+        previous: prevRoom.sitePrice,
+        diff: room.sitePrice - prevRoom.sitePrice,
+      });
+    }
+
+    if (room.discountPrice !== prevRoom.discountPrice) {
+      roomChanges.push({
+        label: "מחיר עם הנחה",
+        current: room.discountPrice,
+        previous: prevRoom.discountPrice,
+        diff: room.discountPrice - prevRoom.discountPrice,
+      });
+    }
+
+    if (room.clubPrice !== prevRoom.clubPrice) {
+      roomChanges.push({
+        label: "מחיר מועדון",
+        current: room.clubPrice,
+        previous: prevRoom.clubPrice,
+        diff: room.clubPrice - prevRoom.clubPrice,
+      });
+    }
+
+    if (roomChanges.length > 0) {
+      changes.push({
+        roomName: room.name,
+        type: "changed",
+        priceChanges: roomChanges,
+      });
+    }
+  }
+
+  return changes;
+}
+
+function buildChangeMessage(dates, url, changes) {
+  let msg = `🚨 <b>שינוי מחיר!</b>\n\n`;
+  msg += `🏨 <b>${HOTEL_NAME}</b>\n`;
+  msg += `📅 ${dates}\n\n`;
+
+  for (const change of changes) {
+    if (change.type === "new") {
+      msg += `🆕 <b>${change.roomName}</b>\n`;
+      msg += `   מחיר מועדון: ${formatPrice(change.current.clubPrice)}\n\n`;
+    } else {
+      msg += `<b>${change.roomName}</b>\n`;
+      for (const pc of change.priceChanges) {
+        const emoji = pc.diff > 0 ? "📈" : "📉";
+        msg += `${emoji} ${pc.label}: <b>${formatPrice(pc.current)}</b> (היה: <s>${formatPrice(pc.previous)}</s>, ${formatDiff(pc.diff)})\n`;
+      }
+      msg += "\n";
+    }
+  }
+
+  msg += `⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}\n`;
+  msg += `🔗 <a href="${url}">להזמנה</a>`;
+
+  return msg;
+}
+
+function buildStatusMessage(results) {
+  let msg = `✅ <b>סטטוס מחירים - ${HOTEL_NAME}</b>\n\n`;
+
+  for (const result of results) {
+    msg += `📅 <b>${result.dates}</b>\n`;
+
+    if (result.rooms.length === 0) {
+      msg += `   ⚠️ לא נמצאו חדרים\n\n`;
+      continue;
+    }
+
+    for (const room of result.rooms) {
+      msg += `   <b>${room.name}</b>\n`;
+      msg += `   💰 מועדון: ${formatPrice(room.clubPrice)}\n`;
+    }
+    msg += "\n";
+  }
+
+  msg += `⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}`;
+
+  return msg;
+}
+
+function buildFirstRunMessage(results) {
+  let msg = `🏨 <b>התחלתי לעקוב אחרי המחירים!</b>\n\n`;
+  msg += `<b>${HOTEL_NAME}</b>\n\n`;
+
+  for (const result of results) {
+    msg += `📅 <b>${result.dates}</b>\n`;
+
+    if (result.rooms.length === 0) {
+      msg += `   ⚠️ לא נמצאו חדרים\n\n`;
+      continue;
+    }
+
+    for (const room of result.rooms) {
+      msg += `   <b>${room.name}</b>\n`;
+      msg += `   💰 באתר: ${formatPrice(room.sitePrice)} → הנחה: ${formatPrice(room.discountPrice)} → מועדון: ${formatPrice(room.clubPrice)}\n`;
+    }
+    msg += "\n";
+  }
+
+  msg += `🔄 בודק כל 15 דקות`;
+
+  return msg;
+}
+
 async function main() {
   console.log("Starting price check...");
 
@@ -49,202 +304,59 @@ async function main() {
   });
 
   try {
-    const page = await browser.newPage();
-
-    // Set Hebrew locale
-    await page.setExtraHTTPHeaders({
-      "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
-    });
-
-    console.log("Loading page...");
-    await page.goto(ISROTEL_URL, { waitUntil: "networkidle2", timeout: 60000 });
-
-    // Wait for the room results to load
-    console.log("Waiting for room content to load...");
-
-    // Wait longer for dynamic content
-    await new Promise((r) => setTimeout(r, 5000));
-
-    // Try waiting for specific elements
-    try {
-      await page.waitForSelector(".room-option, .price-value, .room-price, [data-price], .total-price", {
-        timeout: 15000,
-      });
-    } catch (e) {
-      console.log("Specific selectors not found, trying generic approach...");
+    // Check all searches
+    const results = [];
+    for (const search of SEARCHES) {
+      const result = await checkSearch(browser, search);
+      results.push(result);
     }
 
-    // Wait a bit more for any AJAX calls
-    await new Promise((r) => setTimeout(r, 3000));
-
-    // Take a screenshot for debugging
-    await page.screenshot({ path: "debug-screenshot.png", fullPage: true });
-    console.log("Screenshot saved as debug-screenshot.png");
-
-    // Get full page HTML for debugging
-    const pageContent = await page.content();
-    console.log("Page length:", pageContent.length);
-
-    // Search for price patterns in the full HTML
-    const htmlPriceMatches = pageContent.match(/(\d{1,3}(?:,\d{3})+)\s*₪/g) || [];
-    console.log("Prices found in HTML:", htmlPriceMatches.slice(0, 10));
-
-    // Extract prices from the page
-    const prices = await page.evaluate(() => {
-      const results = [];
-
-      // Method 1: Find all text containing prices (format: X,XXX ₪)
-      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-      while (walker.nextNode()) {
-        const text = walker.currentNode.textContent.trim();
-        const match = text.match(/(\d{1,3}(?:,\d{3})*)\s*₪/);
-        if (match) {
-          const price = parseInt(match[1].replace(/,/g, ""));
-          if (price > 1000 && price < 50000) {
-            results.push(price);
-          }
-        }
-      }
-
-      // Method 2: Look for specific price containers
-      const priceSelectors = [
-        ".price",
-        ".room-price",
-        ".total-price",
-        ".price-value",
-        '[class*="price"]',
-        '[class*="Price"]',
-        "[data-price]",
-      ];
-
-      priceSelectors.forEach((selector) => {
-        document.querySelectorAll(selector).forEach((el) => {
-          const text = el.textContent || el.getAttribute("data-price") || "";
-          const match = text.match(/(\d{1,3}(?:,\d{3})*)/);
-          if (match) {
-            const price = parseInt(match[1].replace(/,/g, ""));
-            if (price > 1000 && price < 50000) {
-              results.push(price);
-            }
-          }
-        });
-      });
-
-      // Method 3: Check innerHTML for hidden price data
-      const bodyHtml = document.body.innerHTML;
-      const htmlMatches = bodyHtml.match(/(\d{1,3},\d{3})\s*₪/g) || [];
-      htmlMatches.forEach((match) => {
-        const price = parseInt(match.replace(/[,₪\s]/g, ""));
-        if (price > 1000 && price < 50000) {
-          results.push(price);
-        }
-      });
-
-      return [...new Set(results)].sort((a, b) => b - a);
-    });
-
-    console.log("Found prices:", prices);
-
-    if (prices.length === 0) {
-      console.log("No prices found - check the debug screenshot");
-      await sendTelegramMessage(
-        `⚠️ <b>אזהרה</b>\n\nלא הצלחתי למצוא מחירים בעמוד.\nבדוק את הסקרינשוט ב-GitHub Actions.\n\n🔗 <a href="${ISROTEL_URL}">בדוק ידנית</a>`
-      );
-      return;
-    }
-
-    const currentPrice = {
-      sitePrice: prices[0] || 0,
-      discountPrice: prices[1] || prices[0] || 0,
-      clubPrice: prices[2] || prices[1] || prices[0] || 0,
-      timestamp: new Date().toISOString(),
-    };
-
-    console.log("Current prices:", currentPrice);
-
-    // Read previous price from file (GitHub Actions cache)
-    const fs = require("fs");
-    const priceFile = "last_price.json";
-    let lastPrice = null;
-
-    if (fs.existsSync(priceFile)) {
+    // Load previous prices
+    let previousData = null;
+    if (fs.existsSync(PRICE_FILE)) {
       try {
-        lastPrice = JSON.parse(fs.readFileSync(priceFile, "utf8"));
-        console.log("Previous prices:", lastPrice);
+        previousData = JSON.parse(fs.readFileSync(PRICE_FILE, "utf8"));
+        console.log("Loaded previous prices");
       } catch (e) {
-        console.log("Could not read previous price file");
+        console.log("Could not read previous prices file");
       }
     }
 
-    // Save current price
-    fs.writeFileSync(priceFile, JSON.stringify(currentPrice, null, 2));
+    // Save current prices
+    fs.writeFileSync(PRICE_FILE, JSON.stringify(results, null, 2));
+    console.log("Saved current prices");
 
-    // First run - notify start
-    if (!lastPrice) {
-      await sendTelegramMessage(
-        `🏨 <b>התחלתי לעקוב אחרי המחירים!</b>\n\n` +
-          `<b>${HOTEL_NAME}</b>\n` +
-          `📅 ${DATES}\n\n` +
-          `💰 מחיר באתר: <b>${formatPrice(currentPrice.sitePrice)}</b>\n` +
-          `💰 מחיר עם הנחה: <b>${formatPrice(currentPrice.discountPrice)}</b>\n` +
-          `💰 מחיר מועדון: <b>${formatPrice(currentPrice.clubPrice)}</b>\n\n` +
-          `🔗 <a href="${ISROTEL_URL}">לעמוד ההזמנה</a>`
-      );
+    // First run - send initial status
+    if (!previousData) {
+      const msg = buildFirstRunMessage(results);
+      await sendTelegramMessage(msg);
+      console.log("First run - sent initial status");
       return;
     }
 
     // Check for changes
-    const changes = [];
+    const prevMap = new Map(previousData.map((p) => [p.id, p]));
+    let hasChanges = false;
 
-    if (currentPrice.sitePrice !== lastPrice.sitePrice) {
-      const diff = currentPrice.sitePrice - lastPrice.sitePrice;
-      const emoji = diff > 0 ? "📈" : "📉";
-      changes.push(
-        `${emoji} מחיר באתר: <b>${formatPrice(currentPrice.sitePrice)}</b> (היה: <s>${formatPrice(lastPrice.sitePrice)}</s>, ${formatDiff(diff)})`
-      );
+    for (const result of results) {
+      const prev = prevMap.get(result.id);
+      const changes = compareSearchResults(result, prev);
+
+      if (changes.length > 0) {
+        hasChanges = true;
+        const msg = buildChangeMessage(result.dates, result.url, changes);
+        await sendTelegramMessage(msg);
+        console.log(`Sent change notification for ${result.dates}`);
+      }
     }
 
-    if (currentPrice.discountPrice !== lastPrice.discountPrice) {
-      const diff = currentPrice.discountPrice - lastPrice.discountPrice;
-      const emoji = diff > 0 ? "📈" : "📉";
-      changes.push(
-        `${emoji} מחיר עם הנחה: <b>${formatPrice(currentPrice.discountPrice)}</b> (היה: <s>${formatPrice(lastPrice.discountPrice)}</s>, ${formatDiff(diff)})`
-      );
-    }
-
-    if (currentPrice.clubPrice !== lastPrice.clubPrice) {
-      const diff = currentPrice.clubPrice - lastPrice.clubPrice;
-      const emoji = diff > 0 ? "📈" : "📉";
-      changes.push(
-        `${emoji} מחיר מועדון: <b>${formatPrice(currentPrice.clubPrice)}</b> (היה: <s>${formatPrice(lastPrice.clubPrice)}</s>, ${formatDiff(diff)})`
-      );
-    }
-
-    if (changes.length > 0) {
-      await sendTelegramMessage(
-        `🚨 <b>שינוי מחיר!</b>\n\n` +
-          `<b>${HOTEL_NAME}</b>\n` +
-          `📅 ${DATES}\n\n` +
-          changes.join("\n") +
-          `\n\n⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}\n` +
-          `🔗 <a href="${ISROTEL_URL}">להזמנה</a>`
-      );
-      console.log("Price change notification sent!");
-    } else if (process.env.MANUAL_TRIGGER === "true") {
-      // Manual trigger - send current status
-      await sendTelegramMessage(
-        `✅ <b>בדיקה ידנית - אין שינוי</b>\n\n` +
-          `<b>${HOTEL_NAME}</b>\n` +
-          `📅 ${DATES}\n\n` +
-          `💰 מחיר באתר: <b>${formatPrice(currentPrice.sitePrice)}</b>\n` +
-          `💰 מחיר עם הנחה: <b>${formatPrice(currentPrice.discountPrice)}</b>\n` +
-          `💰 מחיר מועדון: <b>${formatPrice(currentPrice.clubPrice)}</b>\n\n` +
-          `⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}\n` +
-          `🔗 <a href="${ISROTEL_URL}">להזמנה</a>`
-      );
-      console.log("Manual check - status sent!");
-    } else {
-      console.log("No price changes detected.");
+    // Manual trigger - send status even if no changes
+    if (!hasChanges && process.env.MANUAL_TRIGGER === "true") {
+      const msg = buildStatusMessage(results);
+      await sendTelegramMessage(msg);
+      console.log("Manual trigger - sent status");
+    } else if (!hasChanges) {
+      console.log("No price changes detected");
     }
   } finally {
     await browser.close();

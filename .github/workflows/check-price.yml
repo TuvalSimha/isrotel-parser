@@ -25,7 +25,7 @@ jobs:
       - name: Restore price cache
         uses: actions/cache/restore@v4
         with:
-          path: last_price.json
+          path: last_prices.json
           key: isrotel-price-${{ github.run_id }}
           restore-keys: |
             isrotel-price-
@@ -50,5 +50,5 @@ jobs:
         uses: actions/cache/save@v4
         if: always()
         with:
-          path: last_price.json
+          path: last_prices.json
           key: isrotel-price-${{ github.run_id }}

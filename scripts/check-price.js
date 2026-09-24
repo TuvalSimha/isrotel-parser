@@ -61,15 +61,41 @@ async function extractRoomsFromPage(page) {
   // Get full page HTML
   const html = await page.content();
 
-  // Find all prices in format X,XXX ₪
-  const pricePattern = /(\d{1,3},\d{3})\s*₪/g;
+  // Debug: Show sample of HTML around price area
+  const priceAreaMatch = html.match(/מחיר[^]*?{0,500}/);
+  if (priceAreaMatch) {
+    console.log("Sample HTML near 'מחיר':", priceAreaMatch[0].substring(0, 300));
+  }
+
+  // Find all prices - try multiple patterns
   const allPrices = [];
   let match;
-  while ((match = pricePattern.exec(html)) !== null) {
+
+  // Pattern 1: X,XXX ₪ (with shekel symbol)
+  const pattern1 = /(\d{1,3},\d{3})\s*₪/g;
+  while ((match = pattern1.exec(html)) !== null) {
+    allPrices.push(parseInt(match[1].replace(/,/g, "")));
+  }
+
+  // Pattern 2: X,XXX with HTML entity for shekel
+  const pattern2 = /(\d{1,3},\d{3})\s*(?:&#8362;|&shekel;)/g;
+  while ((match = pattern2.exec(html)) !== null) {
+    allPrices.push(parseInt(match[1].replace(/,/g, "")));
+  }
+
+  // Pattern 3: Look for numbers 3000-9999 that might be prices
+  const pattern3 = />(\d{1},\d{3})</g;
+  while ((match = pattern3.exec(html)) !== null) {
     const price = parseInt(match[1].replace(/,/g, ""));
-    if (price > 1000 && price < 50000) {
+    if (price > 2000 && price < 10000) {
       allPrices.push(price);
     }
+  }
+
+  // Pattern 4: Numbers with nbsp or other whitespace before ₪
+  const pattern4 = /(\d{1,3},\d{3})[\s\u00A0]*₪/g;
+  while ((match = pattern4.exec(html)) !== null) {
+    allPrices.push(parseInt(match[1].replace(/,/g, "")));
   }
 
   console.log("All prices found:", allPrices);
@@ -111,7 +137,7 @@ async function extractRoomsFromPage(page) {
   return rooms;
 }
 
-async function checkSearch(browser, search) {
+async function checkSearch(browser, search, isFirst = false) {
   console.log(`\nChecking ${search.dates}...`);
 
   const page = await browser.newPage();
@@ -133,6 +159,12 @@ async function checkSearch(browser, search) {
     }
 
     await new Promise((r) => setTimeout(r, 3000));
+
+    // Take screenshot for first search (for debugging)
+    if (isFirst) {
+      await page.screenshot({ path: "debug-screenshot.png", fullPage: true });
+      console.log("Screenshot saved");
+    }
 
     // Extract rooms and prices
     const rooms = await extractRoomsFromPage(page);
@@ -294,8 +326,8 @@ async function main() {
   try {
     // Check all searches
     const results = [];
-    for (const search of SEARCHES) {
-      const result = await checkSearch(browser, search);
+    for (let i = 0; i < SEARCHES.length; i++) {
+      const result = await checkSearch(browser, SEARCHES[i], i === 0);
       results.push(result);
     }
 

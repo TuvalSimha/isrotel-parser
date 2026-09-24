@@ -2,9 +2,13 @@ name: Check Isrotel Price
 
 on:
   schedule:
-    # Run every 15 minutes
-    - cron: "*/15 * * * *"
+    # Run every 15 minutes at random offset (7, 22, 37, 52) to avoid peak times
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch: # Allow manual trigger
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/check-price.yml'
 
 jobs:
   check-price:
@@ -52,4 +56,3 @@ jobs:
         with:
           path: last_prices.json
           key: isrotel-price-${{ github.run_id }}
-# Trigger scheduled runs

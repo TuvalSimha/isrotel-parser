@@ -34,6 +34,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MANUAL_TRIGGER: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
         run: node scripts/check-price.js
         continue-on-error: true
 

@@ -230,6 +230,19 @@ async function main() {
           `🔗 <a href="${ISROTEL_URL}">להזמנה</a>`
       );
       console.log("Price change notification sent!");
+    } else if (process.env.MANUAL_TRIGGER === "true") {
+      // Manual trigger - send current status
+      await sendTelegramMessage(
+        `✅ <b>בדיקה ידנית - אין שינוי</b>\n\n` +
+          `<b>${HOTEL_NAME}</b>\n` +
+          `📅 ${DATES}\n\n` +
+          `💰 מחיר באתר: <b>${formatPrice(currentPrice.sitePrice)}</b>\n` +
+          `💰 מחיר עם הנחה: <b>${formatPrice(currentPrice.discountPrice)}</b>\n` +
+          `💰 מחיר מועדון: <b>${formatPrice(currentPrice.clubPrice)}</b>\n\n` +
+          `⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}\n` +
+          `🔗 <a href="${ISROTEL_URL}">להזמנה</a>`
+      );
+      console.log("Manual check - status sent!");
     } else {
       console.log("No price changes detected.");
     }

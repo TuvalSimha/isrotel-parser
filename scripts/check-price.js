@@ -58,69 +58,57 @@ function formatDiff(diff) {
 }
 
 async function extractRoomsFromPage(page) {
-  return await page.evaluate(() => {
-    const rooms = [];
+  // Get full page HTML
+  const html = await page.content();
 
-    // Find all room option sections
-    const roomSections = document.querySelectorAll('[class*="room"], [class*="option"], .card, article');
-
-    // Try to find room titles and their associated prices
-    const allText = document.body.innerText;
-
-    // Split by room patterns
-    const roomPattern = /(חדר קדמא[^\n]*|סטודיו קדמא[^\n]*)/g;
-    const roomMatches = allText.match(roomPattern) || [];
-
-    // Find all prices in format X,XXX ₪
-    const pricePattern = /(\d{1,3}(?:,\d{3})+)\s*₪/g;
-    const allPrices = [];
-    let match;
-    while ((match = pricePattern.exec(allText)) !== null) {
-      const price = parseInt(match[1].replace(/,/g, ""));
-      if (price > 1000 && price < 50000) {
-        allPrices.push(price);
-      }
+  // Find all prices in format X,XXX ₪
+  const pricePattern = /(\d{1,3},\d{3})\s*₪/g;
+  const allPrices = [];
+  let match;
+  while ((match = pricePattern.exec(html)) !== null) {
+    const price = parseInt(match[1].replace(/,/g, ""));
+    if (price > 1000 && price < 50000) {
+      allPrices.push(price);
     }
+  }
 
-    // Group prices by 3 (site price, discount price, club price)
-    // Each room has 3 prices displayed
-    const uniqueRoomNames = [...new Set(roomMatches)].filter(
-      (name) => name.includes("חדר") || name.includes("סטודיו")
-    );
+  console.log("All prices found:", allPrices);
 
-    // Get unique prices and sort descending
-    const uniquePrices = [...new Set(allPrices)].sort((a, b) => b - a);
-
-    // Try to match rooms with their prices
-    // Prices appear in groups of 3 for each room
-    for (let i = 0; i < uniqueRoomNames.length && i * 3 < uniquePrices.length; i++) {
-      const roomName = uniqueRoomNames[i].trim();
-      const priceIndex = i * 3;
-
-      if (priceIndex + 2 < uniquePrices.length) {
-        rooms.push({
-          name: roomName,
-          sitePrice: uniquePrices[priceIndex],
-          discountPrice: uniquePrices[priceIndex + 1],
-          clubPrice: uniquePrices[priceIndex + 2],
-        });
-      }
+  // Find room names
+  const roomNamePattern = /(חדר קדמא[^<\n]*|סטודיו קדמא[^<\n]*)/g;
+  const roomNames = [];
+  while ((match = roomNamePattern.exec(html)) !== null) {
+    const name = match[1].trim();
+    if (name.length < 50 && !roomNames.includes(name)) {
+      roomNames.push(name);
     }
+  }
 
-    // Fallback: if no rooms found, just return all prices grouped
-    if (rooms.length === 0 && uniquePrices.length >= 3) {
-      for (let i = 0; i * 3 + 2 < uniquePrices.length; i++) {
-        rooms.push({
-          name: `חדר אפשרות ${i + 1}`,
-          sitePrice: uniquePrices[i * 3],
-          discountPrice: uniquePrices[i * 3 + 1],
-          clubPrice: uniquePrices[i * 3 + 2],
-        });
-      }
-    }
+  console.log("Room names found:", roomNames);
 
-    return rooms;
-  });
+  // Remove duplicate prices and sort descending
+  const uniquePrices = [...new Set(allPrices)].sort((a, b) => b - a);
+  console.log("Unique prices:", uniquePrices);
+
+  const rooms = [];
+
+  // Each room has 3 prices (site, discount, club) - sorted high to low
+  // Group prices by 3
+  const numRooms = Math.floor(uniquePrices.length / 3);
+
+  for (let i = 0; i < numRooms; i++) {
+    const roomName = roomNames[i] || `חדר אפשרות ${i + 1}`;
+    const priceIndex = i * 3;
+
+    rooms.push({
+      name: roomName,
+      sitePrice: uniquePrices[priceIndex],
+      discountPrice: uniquePrices[priceIndex + 1],
+      clubPrice: uniquePrices[priceIndex + 2],
+    });
+  }
+
+  return rooms;
 }
 
 async function checkSearch(browser, search) {

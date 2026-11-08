@@ -1,26 +1,17 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 
-// Configuration - Add your date ranges here
+// Configuration - EL AL flight search
 const SEARCHES = [
   {
-    id: "25-27-sep",
-    dates: "25-27/09/2026",
-    url: "https://www.isrotel.co.il/searchresult/%D7%97%D7%93%D7%A8-%D7%91%D7%9E%D7%9C%D7%95%D7%9F/?SearchQuery=KD/25-09-2026/27-09-2026/2-0-1/-1/r17008",
-  },
-  {
-    id: "28-30-sep",
-    dates: "28-30/09/2026",
-    url: "https://www.isrotel.co.il/searchresult/%D7%97%D7%93%D7%A8-%D7%91%D7%9E%D7%9C%D7%95%D7%9F/?SearchQuery=KD/28-09-2026/30-09-2026/2-0-1/-1",
-  },
-  {
-    id: "29-sep-01-oct",
-    dates: "29/09-01/10/2026",
-    url: "https://www.isrotel.co.il/searchresult/%D7%97%D7%93%D7%A8-%D7%91%D7%9E%D7%9C%D7%95%D7%9F/?SearchQuery=KD/29-09-2026/01-10-2026/2-0-1/-1",
+    id: "tlv-beg-jun-3-6",
+    route: "TLV → BEG",
+    routeHebrew: "תל אביב → בלגרד",
+    dates: "03-06/06/2025",
+    url: "https://booking.elal.com/engine?iT=MzEsMTM5LDgsMCwwLDAsMCwwLDAsMywyMzcsODcsMjA5LDE0NiwxNjIsNTYsMjAsMjUzLDI0LDIwMyw3MSw0NSw2NCw2OCwxMjEsMTc2LDQ0LDQsMjMzLDE5OCw4MSwxNTYsODYsMTkyLDIxNCwxNTEsMTc0LDAsODEsMjEwLDM0LDE4NCwzMywxMDYsMjM1LDIxNSw3OSwyLDEwLDExNiwxMzksMTgxLDUxLDkxLDE4NywxODEsNDcsMjUzLDk2LDc2LDIzOCwxODksNTcsNTcsNTUsMTU2LDE1NSw2NCwzMSw4OSw2MSwxMjAsMzAsNSwyMzgsMTQ3LDEzNSwxNjYsMTA0LDEwMCwyMTYsMjMsMTMxLDU1LDIwOSw3MiwxMTAsODIsMjI3LDE5Nyw5NSwyNCwyMTIsMTA0LDE0NCwxMDEsMTY0LDE3MSw5NiwyMDksODYsMTI5LDI5LDcyLDE2NiwzMCw3MCw2Myw0NiwxNTUsMjE0LDIwMyw4NiwxOTYsMTgyLDExMCw5NSwxNTYsMzksMTI1LDIzMyw1NiwxMjYsMjE5LDE0Miw3MCwxMzUsMTM3LDI0MywxMTQsNCwyMDYsMjQyLDEwNCw2MSwyMzcsMTk3LDE0OSwyMjQsODgsMTQyLDE5NywxNjEsMTc3LDU4LDE4Niw0NCw1LDI0OSwxODAsMTIyLDE1NywxNjAsMTA1LDE1MiwzMiwxMjMsNDMsNzksMTAyLDE0Miw2MCwxNzYsMTgyLDI0MiwxMTYsOTcsMjQzLDYzLDI5LDE5OSw5MiwyMTEsMTU5LDExMCwxNjMsMTQ1LDc5LDk5LDk5LDE4MywxMDEsMTE0LDE5OCwxMjMsMTQwLDIyMCwyMzEsMjQwLDIyOCwyMzcsMTg2LDE5NiwyMywxNTAsMjMxLDI0MSwyMzUsMTM4LDEyMCwxNzMsMjAxLDEwNSwxNjIsNDEsMTY3LDE1MSwxMTksMTU1LDk3LDE1OCwxNTEsMTM5LDI0NiwyMTQsMjEsNTYsNzAsMTIyLDQ5LDExNywyMDQsMTQ5LDE2NSwyNiwxMzcsMTc3LDExLDMsOTUsNTMsMTY0LDEzNywyMjksMTgxLDc3LDEwOSwyMDAsMTU1LDIxOCwyNDIsNjAsODUsNzksMTA0LDI0NSwyNiwxNTYsNDAsMjMwLDEzNSwxMjEsMjE3LDExNCwxOSwyMDMsMjIsMzksMjM5LDEzNCwxODQsMTI2LDEwNSwxOTAsMTA1LDE5MywyMTksMTA1LDE4LDczLDIwMSwxMjgsMTUyLDIzNSwxODMsMTU5LDMxLDEwMCw1OCwxMjYsMjE0LDIwOSwxMjYsNjcsNDYsMjM1LDE1MywyMSwyNTIsMjQ4LDI0OCwyMzUsNTMsMTA2LDIzNSwxMTEsMTUwLDE3MSwxMiwyMzYsOTAsMjIzLDIxMSwxMjMsMTE3LDY1LDExNiwyMjcsMTIwLDEzOSwxNjIsMTQxLDI2LDEzMCwzNiwxMjksNzMsOTMsMjI4LDIzNCw0NSwxMywxMjIsMTEzLDIwLDIzOSwyMDYsMTE3LDY1LDE2MiwxMzEsNjEsMTM0LDU5LDExNiwyMTYsMTAxLDMsMjQ3LDE0NCwxNjAsOCwzOCw3MywxODksNTMsMTYwLDYsMTMwLDIwOSwxNTgsMjA1LDE2LDE5Niw4LDIzNiwzMiwxMTcsMTk5LDcsMjI2LDE5OCwxMzUsMjAwLDE2NywxOTAsMjQsMTYzLDEzLDEzOCwxMCw4Nyw5MywxMDQsMTA3LDI5LDIxOCw0MCwyMjAsMTczLDM5LDE1LDI0MywxNTgsNzQsMjcsMzMsMTE5LDQwLDc0LDIyMiwxOSwyNDIsMTQ0LDExOCwxMTAsMTksMTE1LDE1NSwyNDgsMTA1LDE1NCwyMDQsMjMxLDYxLDI1MywxNzksMTYzLDEwLDE2NSwxNTUsMjE5LDIyOCwxMjMsNDcsMywxNDQsMTg4LDIxNiwxMDMsMTk2LDE3MywxNzcsNjcsNywzMywxMTIsOTcsMTUyLDE2NiwzMywyMzcsNjcsMjI0LDY1LDE5NSwxNzUsMTgzLDE0OCwyMzIsMTYsMTM0LDIwNCwyMywxMjMsMTI4LDE2MCwxNTIsMzcsMjM1LDMzLDExNCw0NiwzOSwxNTUsMTAzLDI0MiwzNyw2OSwxODUsMTM4LDE4MSw5MiwxODIsNzMsMTIsMjAyLDIwNCwyNDYsNDYsMTYzLDIyNCwyMDksMTU3LDM3LDE4NCwxMiw5NSwyMDQsODAsMjI4LDEzOCwxOTYsMTg0LDI0MiwyMjYsMTgzLDIzMyw4Nyw3Miw5OSw3Niw3NywzMiw2OCwzMiw5NywyNDgsNTIsNTMsMTk4LDc4LDU3LDE2Miw5OSw5MywyMDAsMTUyLDI2LDksNiwyMDQsMjUyLDIzMiwyMDksMjUyLDExMyw2Niw5NSwyMjYsMjU1LDEyOCwxMjIsNTQsNTEsMjIxLDEzMiw3MSwxMzksNDIsMTU3LDIyMCwxNjYsMTI0LDM4LDkyLDExMiw0MCwxMTYsMTYzLDE1MSwxMDksOTUsMzIsMTEsOTUsMjM1LDE1OCw4NywxMzcsMjM1LDE2Nyw1LDExMSwyNCwyMTcsMjU1LDU0LDEwOSwxMzcsMjMsMTIwLDU1LDc1LDAsNDgsMjE3LDYyLDEwMiw0Nyw0MywzNyw2NiwxMDUsMTAxLDE3NywxMzUsMTkxLDY0LDM2LDE1MiwxOTUsMzUsMTk2LDMyLDg0LDE2LDIyMiwxOTksMTUyLDM2LDEzMywyMzAsMTI0LDEzMiwxNjEsNzEsMjMyLDEyMCwxMywxOTQsNCwxNjYsMTgxLDgsMTA0LDE4NSwyMSw5OSwyMzksMTI4LDQ5LDE0MCwxODgsMTc5LDE1NCwxNjksMjE2LDI0LDIwNyw1MSwxMDAsMzEsMzgsNCw2OSw1NSwxODksNjIsNDYsMjA2LDE3MCw3NiwxMzksMjUwLDgwLDMxLDIxMyw5NiwxNzcsODUsMTI0LDExNywyNDAsMTczLDE3Miw2LDE5NSwxNjcsMTI3LDkyLDg2LDExNCwyMSwxMTgsOTQsMjI4LDM3LDI1LDE4MSw2MiwyMTUsODEsMTgyLDIzMCwxMjUsMjksMjEsOTIsNzUsMTE1LDE3MSwxMDAsNDQsMjIyLDIxMywyMDksMTA4LDk0LDE3MCwxNjMsMjAsNjMsMTIzLDIwMCwyNDMsMjI1LDEwOCw5NiwyMjgsMjAyLDI0LDEyLDE5OSw3OSw1MSw2OSwxODcsMTcxLDE2NiwxMCwyNTMsMTc4LDM1LDIzOSwxMzksNzgsOTAsMjEsODEsMjIxLDEyMywxNDAsNjYsMTg2LDc2LDE2NiwxMjcsMTkxLDE0Niw5MiwxMTMsMjA0LDg2LDczLDE1NywyMzgsMjM2LDEyNywxNjMsMjAxLDE2MSw2MSwxNjMsNzAsMjA0LDIyNCwxOCwyMjQsMTM0LDIxMiwxNjQsMTYsMTI0LDEyOCw4NywxNTcsMiwxOTQsOTgsNCw3OCwyMzIsNTIsNTYsMTY5LDE5MywxODEsNDQsMTQyLDk0LDc3LDIwMiwxODEsMTA1LDExNCwyOCwxODMsMjAyLDIsMTEsMjEsOTksNzIsMTQsNTYsMjYsMjUyLDI1NCw1LDI0NCwxNzMsMjQxLDExMSwxNDEsMjU1LDE3NSwyNiwyNTUsMjA1LDE3OSwyNDgsMjUxLDY5LDIzMywxNDUsODgsMTkxLDk1LDE0OCwyMDIsMjAzLDEyNCwxOTEsNDAsMjUzLDE1NSw0Nyw3NCw5NSw0NiwzMiwxNjksMjUwLDIsNzQsOTksMjQ3LDU2LDIyMiwxOTcsODcsMCw1NCwxMDAsMjIzLDgyLDIwOSwxMzQsMTUwLDYwLDg1LDI1MCwxMjQsMTY2LDE3OCwyNSwyMTIsMTcyLDEwNCwyMiwyMzcsNDksMjAxLDI2LDE2NiwxMjYsMTgxLDE2OSwyMDcsOTAsMjE4LDE4NywxMjYsNzksMTI5LDM1LDEyLDE3MywyNDMsNjIsMTg5LDIwNSwyMTYsNjEsMjQ2LDE1MCwxMjYsOTgsOSwxOCw3NCwyNDQsMTYsMTI2LDMyLDEyMiwxMjgsMjA0LDMzLDE5Miw5NCw4MCwyMjYsMTI3LDYxLDU0LDM2LDgsMzcsNzgsMTQ0LDE4NSwxMzQsMjM5LDExOCwyMTUsMTMsMTU4LDk1LDI0MywxNDEsMTEwLDg3LDIyNCwyNiwyMzUsNzgsODcsMTUwLDEyOCwyMzUsMjQzLDI5LDIxNSw3NywxNTMsMzQsMTUsMTA2LDQwLDE2MSwxODEsMTIxLDg2LDE1MiwxNjQsNjEsMTQ0LDQsMjEyLDE1OCwxNjQsMTc2LDkwLDE1OCwxNzksNjgsMzMsMjYsOTIsMjE1LDIyNiwzNyw3MCw4OSwxMDAsMTMsMjIzLDIwLDIxOCwxNTcsODUsMTczLDE5MSwyMTksMjQ2LDE0MCwxMTMsMTczLDMxLDEzMCwxNjgsMjMsMTkyLDkwLDEyNywxMzEsMTIzLDE4MSwyNTQsMTU4LDI0NCw1NiwyMTgsMjI2LDE1MiwyNTMsMTMzLDE3Miw5LDIyNiwyOSwyMzYsNSwxMzIsMjM2LDIxNywxNzksMTY4LDExLDg0LDQ1LDI1MCwyMzMsMTE2LDEwNiwxOTQsMTYsMTMyLDc3LDQ3LDE2NiwxNTksMTQ3LDEyMiwwLDQxLDMzLDI5LDE2NSwyMjksNjcsMjI3LDE1LDE2MCwxMDMsMiwxNzksMjE0LDE0Myw5NiwxNDMsMTc1LDI0NSwxLDEwMiwzMiwyMjIsMjE4LDEwMywxMzEsNjEsMjUzLDE2MywxOTAsOTUsMTk3LDE5MCw1MSwyMzMsMjE4LDE1LDAsMA%3D%3D",
   },
 ];
 
-const HOTEL_NAME = "קדמא";
 const PRICE_FILE = "last_prices.json";
 
 async function sendTelegramMessage(message) {
@@ -48,99 +39,131 @@ async function sendTelegramMessage(message) {
   return data.ok;
 }
 
-function formatPrice(price) {
-  return `${price.toLocaleString("he-IL")} ₪`;
+function formatPrice(price, currency = "USD") {
+  if (currency === "ILS" || currency === "₪") {
+    return `${price.toLocaleString("he-IL")} ₪`;
+  }
+  return `$${price.toLocaleString("en-US")}`;
 }
 
-function formatDiff(diff) {
+function formatDiff(diff, currency = "USD") {
   const sign = diff > 0 ? "+" : "";
-  return `${sign}${diff.toLocaleString("he-IL")} ₪`;
+  if (currency === "ILS" || currency === "₪") {
+    return `${sign}${diff.toLocaleString("he-IL")} ₪`;
+  }
+  return `${sign}$${diff.toLocaleString("en-US")}`;
 }
 
-async function extractRoomsFromPage(page) {
-  // Get full page HTML
+async function extractFlightsFromPage(page) {
   const html = await page.content();
 
-  // Debug: Show sample of HTML around price area
-  const priceIndex = html.indexOf("מחיר");
-  if (priceIndex > -1) {
-    console.log("Sample HTML near 'מחיר':", html.substring(priceIndex, priceIndex + 500));
-  }
+  // Save HTML for debugging
+  fs.writeFileSync("debug-page.html", html);
+  console.log("Saved page HTML for debugging");
 
-  // Find all prices - try multiple patterns
+  const flights = [];
+
+  // Try multiple price extraction patterns for EL AL
   const allPrices = [];
   let match;
 
-  // Pattern 1: X,XXX ₪ (with shekel symbol)
-  const pattern1 = /(\d{1,3},\d{3})\s*₪/g;
-  while ((match = pattern1.exec(html)) !== null) {
-    allPrices.push(parseInt(match[1].replace(/,/g, "")));
-  }
-
-  // Pattern 2: X,XXX with HTML entity for shekel
-  const pattern2 = /(\d{1,3},\d{3})\s*(?:&#8362;|&shekel;)/g;
-  while ((match = pattern2.exec(html)) !== null) {
-    allPrices.push(parseInt(match[1].replace(/,/g, "")));
-  }
-
-  // Pattern 3: Look for numbers 3000-9999 that might be prices
-  const pattern3 = />(\d{1},\d{3})</g;
-  while ((match = pattern3.exec(html)) !== null) {
-    const price = parseInt(match[1].replace(/,/g, ""));
-    if (price > 2000 && price < 10000) {
-      allPrices.push(price);
+  // Pattern 1: USD prices ($XXX or $X,XXX)
+  const usdPattern = /\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g;
+  while ((match = usdPattern.exec(html)) !== null) {
+    const price = parseFloat(match[1].replace(/,/g, ""));
+    if (price > 50 && price < 10000) {
+      allPrices.push({ price, currency: "USD" });
     }
   }
 
-  // Pattern 4: Numbers with nbsp or other whitespace before ₪
-  const pattern4 = /(\d{1,3},\d{3})[\s\u00A0]*₪/g;
-  while ((match = pattern4.exec(html)) !== null) {
-    allPrices.push(parseInt(match[1].replace(/,/g, "")));
+  // Pattern 2: ILS prices (₪XXX or XXX ₪)
+  const ilsPattern1 = /₪\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g;
+  while ((match = ilsPattern1.exec(html)) !== null) {
+    const price = parseFloat(match[1].replace(/,/g, ""));
+    if (price > 100 && price < 50000) {
+      allPrices.push({ price, currency: "ILS" });
+    }
+  }
+
+  const ilsPattern2 = /(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*₪/g;
+  while ((match = ilsPattern2.exec(html)) !== null) {
+    const price = parseFloat(match[1].replace(/,/g, ""));
+    if (price > 100 && price < 50000) {
+      allPrices.push({ price, currency: "ILS" });
+    }
+  }
+
+  // Pattern 3: Look for price in data attributes or JSON
+  const jsonPricePattern = /"price":\s*(\d+(?:\.\d+)?)/g;
+  while ((match = jsonPricePattern.exec(html)) !== null) {
+    const price = parseFloat(match[1]);
+    if (price > 50 && price < 50000) {
+      allPrices.push({ price, currency: "USD" });
+    }
+  }
+
+  // Pattern 4: Total price patterns
+  const totalPattern = /total[^>]*>?\s*\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/gi;
+  while ((match = totalPattern.exec(html)) !== null) {
+    const price = parseFloat(match[1].replace(/,/g, ""));
+    if (price > 50 && price < 10000) {
+      allPrices.push({ price, currency: "USD" });
+    }
   }
 
   console.log("All prices found:", allPrices);
 
-  // Find room names - clean version
-  const roomNamePattern = /(חדר קדמא[^"<\n]*|סטודיו קדמא[^"<\n]*)/g;
-  const roomNames = [];
-  while ((match = roomNamePattern.exec(html)) !== null) {
-    let name = match[1].trim();
-    // Clean up any HTML artifacts
-    name = name.replace(/["<>]/g, "").trim();
-    if (name.length > 5 && name.length < 50 && !roomNames.includes(name)) {
-      roomNames.push(name);
+  // Remove duplicates and sort
+  const uniquePrices = [];
+  const seen = new Set();
+  for (const p of allPrices) {
+    const key = `${p.price}-${p.currency}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniquePrices.push(p);
+    }
+  }
+  uniquePrices.sort((a, b) => a.price - b.price);
+
+  console.log("Unique prices:", uniquePrices);
+
+  // Extract flight class names if available
+  const classPatterns = [
+    /economy|כלכלית/gi,
+    /business|עסקים/gi,
+    /premium|פרימיום/gi,
+    /lite|לייט/gi,
+    /classic|קלאסיק/gi,
+    /flex|גמיש/gi,
+  ];
+
+  const classNames = [];
+  for (const pattern of classPatterns) {
+    if (pattern.test(html)) {
+      classNames.push(pattern.source.split("|")[0]);
     }
   }
 
-  console.log("Room names found:", roomNames);
+  console.log("Flight classes found:", classNames);
 
-  // Remove duplicate prices and sort descending
-  const uniquePrices = [...new Set(allPrices)].sort((a, b) => b - a);
-  console.log("Unique prices:", uniquePrices);
-
-  const rooms = [];
-
-  // Each room has 3 prices (site, discount, club) - sorted high to low
-  // Group prices by 3
-  const numRooms = Math.floor(uniquePrices.length / 3);
-
-  for (let i = 0; i < numRooms; i++) {
-    const roomName = roomNames[i] || `חדר אפשרות ${i + 1}`;
-    const priceIndex = i * 3;
-
-    rooms.push({
-      name: roomName,
-      sitePrice: uniquePrices[priceIndex],
-      discountPrice: uniquePrices[priceIndex + 1],
-      clubPrice: uniquePrices[priceIndex + 2],
-    });
+  // Build flight options from prices
+  if (uniquePrices.length > 0) {
+    // Group by likely fare classes (lowest prices first)
+    for (let i = 0; i < Math.min(uniquePrices.length, 5); i++) {
+      const p = uniquePrices[i];
+      flights.push({
+        name: classNames[i] || `Option ${i + 1}`,
+        price: p.price,
+        currency: p.currency,
+      });
+    }
   }
 
-  return rooms;
+  return flights;
 }
 
 async function checkSearch(browser, search, isFirst = false) {
-  console.log(`\nChecking ${search.dates}...`);
+  console.log(`\nChecking ${search.route} (${search.dates})...`);
 
   const page = await browser.newPage();
 
@@ -148,35 +171,45 @@ async function checkSearch(browser, search, isFirst = false) {
     "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
   });
 
+  // Set viewport to ensure full page renders
+  await page.setViewport({ width: 1920, height: 1080 });
+
   try {
-    await page.goto(search.url, { waitUntil: "networkidle2", timeout: 60000 });
+    console.log("Navigating to:", search.url);
+    await page.goto(search.url, { waitUntil: "networkidle2", timeout: 90000 });
 
-    // Wait for content to load
-    await new Promise((r) => setTimeout(r, 5000));
+    // Wait for page to fully load
+    console.log("Waiting for page to render...");
+    await new Promise((r) => setTimeout(r, 10000));
 
+    // Try to wait for price elements
     try {
-      await page.waitForSelector('[class*="room"], [class*="price"], .card', { timeout: 15000 });
+      await page.waitForSelector('[class*="price"], [class*="fare"], [class*="total"]', { timeout: 20000 });
+      console.log("Found price-related elements");
     } catch (e) {
-      console.log("Waiting for generic content...");
+      console.log("No specific price selectors found, continuing...");
     }
 
-    await new Promise((r) => setTimeout(r, 3000));
+    // Additional wait for dynamic content
+    await new Promise((r) => setTimeout(r, 5000));
 
-    // Take screenshot for first search (for debugging)
+    // Take screenshot
     if (isFirst) {
       await page.screenshot({ path: "debug-screenshot.png", fullPage: true });
       console.log("Screenshot saved");
     }
 
-    // Extract rooms and prices
-    const rooms = await extractRoomsFromPage(page);
-    console.log(`Found ${rooms.length} rooms for ${search.dates}:`, rooms);
+    // Extract flights and prices
+    const flights = await extractFlightsFromPage(page);
+    console.log(`Found ${flights.length} flight options for ${search.route}:`, flights);
 
     return {
       id: search.id,
+      route: search.route,
+      routeHebrew: search.routeHebrew,
       dates: search.dates,
       url: search.url,
-      rooms: rooms,
+      flights: flights,
       timestamp: new Date().toISOString(),
     };
   } finally {
@@ -189,55 +222,28 @@ function compareSearchResults(current, previous) {
 
   if (!previous) return changes;
 
-  const prevRoomsMap = new Map(previous.rooms.map((r) => [r.name, r]));
+  const prevFlightsMap = new Map(previous.flights.map((f) => [f.name, f]));
 
-  for (const room of current.rooms) {
-    const prevRoom = prevRoomsMap.get(room.name);
+  for (const flight of current.flights) {
+    const prevFlight = prevFlightsMap.get(flight.name);
 
-    if (!prevRoom) {
-      // New room appeared
+    if (!prevFlight) {
       changes.push({
-        roomName: room.name,
+        flightName: flight.name,
         type: "new",
-        current: room,
+        current: flight,
       });
       continue;
     }
 
-    const roomChanges = [];
-
-    if (room.sitePrice !== prevRoom.sitePrice) {
-      roomChanges.push({
-        label: "מחיר באתר",
-        current: room.sitePrice,
-        previous: prevRoom.sitePrice,
-        diff: room.sitePrice - prevRoom.sitePrice,
-      });
-    }
-
-    if (room.discountPrice !== prevRoom.discountPrice) {
-      roomChanges.push({
-        label: "מחיר עם הנחה",
-        current: room.discountPrice,
-        previous: prevRoom.discountPrice,
-        diff: room.discountPrice - prevRoom.discountPrice,
-      });
-    }
-
-    if (room.clubPrice !== prevRoom.clubPrice) {
-      roomChanges.push({
-        label: "מחיר מועדון",
-        current: room.clubPrice,
-        previous: prevRoom.clubPrice,
-        diff: room.clubPrice - prevRoom.clubPrice,
-      });
-    }
-
-    if (roomChanges.length > 0) {
+    if (flight.price !== prevFlight.price) {
       changes.push({
-        roomName: room.name,
+        flightName: flight.name,
         type: "changed",
-        priceChanges: roomChanges,
+        current: flight.price,
+        previous: prevFlight.price,
+        currency: flight.currency,
+        diff: flight.price - prevFlight.price,
       });
     }
   }
@@ -245,70 +251,56 @@ function compareSearchResults(current, previous) {
   return changes;
 }
 
-function buildChangeMessage(dates, url, changes, currentRooms) {
-  let msg = `🔔 <b>היי! יש שינוי במחיר!</b>\n\n`;
-  msg += `🏨 מלון <b>${HOTEL_NAME}</b>\n`;
-  msg += `📅 תאריכים: <b>${dates}</b>\n`;
+function buildChangeMessage(result, changes) {
+  let msg = `🔔 <b>היי! יש שינוי במחיר הטיסה!</b>\n\n`;
+  msg += `✈️ <b>EL AL</b>\n`;
+  msg += `🛫 מסלול: <b>${result.routeHebrew}</b>\n`;
+  msg += `📅 תאריכים: <b>${result.dates}</b>\n`;
   msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const change of changes) {
-    const currentRoom = currentRooms.find(r => r.name === change.roomName);
-
     if (change.type === "new") {
-      msg += `🆕 <b>${change.roomName}</b> (חדר חדש!)\n`;
-      if (currentRoom) {
-        msg += `   💵 מחיר באתר: ${formatPrice(currentRoom.sitePrice)}\n`;
-        msg += `   🏷️ עם הנחה: ${formatPrice(currentRoom.discountPrice)}\n`;
-        msg += `   ⭐ מועדון: <b>${formatPrice(currentRoom.clubPrice)}</b>\n`;
-      }
-      msg += "\n";
+      msg += `🆕 <b>${change.flightName}</b> (אפשרות חדשה!)\n`;
+      msg += `   💵 מחיר: ${formatPrice(change.current.price, change.current.currency)}\n\n`;
     } else {
-      msg += `🛏️ <b>${change.roomName}</b>\n\n`;
-
-      for (const pc of change.priceChanges) {
-        const emoji = pc.diff > 0 ? "📈 עלה" : "📉 ירד";
-        const diffEmoji = pc.diff > 0 ? "🔺" : "🔻";
-        msg += `${emoji}: ${pc.label}\n`;
-        msg += `   לפני: <s>${formatPrice(pc.previous)}</s>\n`;
-        msg += `   עכשיו: <b>${formatPrice(pc.current)}</b> ${diffEmoji} ${formatDiff(pc.diff)}\n\n`;
-      }
-
-      // Show all current prices
-      if (currentRoom) {
-        msg += `📊 כל המחירים העדכניים:\n`;
-        msg += `   💵 באתר: ${formatPrice(currentRoom.sitePrice)}\n`;
-        msg += `   🏷️ עם הנחה: ${formatPrice(currentRoom.discountPrice)}\n`;
-        msg += `   ⭐ מועדון: <b>${formatPrice(currentRoom.clubPrice)}</b>\n`;
-      }
-      msg += "\n";
+      const emoji = change.diff > 0 ? "📈 עלה" : "📉 ירד";
+      const diffEmoji = change.diff > 0 ? "🔺" : "🔻";
+      msg += `✈️ <b>${change.flightName}</b>\n\n`;
+      msg += `${emoji}:\n`;
+      msg += `   לפני: <s>${formatPrice(change.previous, change.currency)}</s>\n`;
+      msg += `   עכשיו: <b>${formatPrice(change.current, change.currency)}</b> ${diffEmoji} ${formatDiff(change.diff, change.currency)}\n\n`;
     }
   }
 
-  msg += `━━━━━━━━━━━━━━━\n`;
+  // Show all current prices
+  msg += `📊 <b>כל המחירים העדכניים:</b>\n`;
+  for (const flight of result.flights) {
+    msg += `   ✈️ ${flight.name}: <b>${formatPrice(flight.price, flight.currency)}</b>\n`;
+  }
+
+  msg += `\n━━━━━━━━━━━━━━━\n`;
   msg += `⏰ ${new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" })}\n`;
-  msg += `👉 <a href="${url}">לחצו כאן להזמנה</a>`;
+  msg += `👉 <a href="${result.url}">לחצו כאן להזמנה</a>`;
 
   return msg;
 }
 
 function buildStatusMessage(results) {
-  let msg = `👋 <b>היי! הנה סטטוס המחירים</b>\n\n`;
-  msg += `🏨 מלון <b>${HOTEL_NAME}</b>\n`;
+  let msg = `👋 <b>היי! הנה סטטוס מחירי הטיסות</b>\n\n`;
+  msg += `✈️ <b>EL AL</b>\n`;
   msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const result of results) {
-    msg += `📅 <b>${result.dates}</b>\n`;
+    msg += `🛫 <b>${result.routeHebrew}</b>\n`;
+    msg += `📅 ${result.dates}\n\n`;
 
-    if (result.rooms.length === 0) {
-      msg += `   ⚠️ לא נמצאו חדרים זמינים\n\n`;
+    if (result.flights.length === 0) {
+      msg += `   ⚠️ לא נמצאו טיסות זמינות\n\n`;
       continue;
     }
 
-    for (const room of result.rooms) {
-      msg += `\n🛏️ <b>${room.name}</b>\n`;
-      msg += `   💵 מחיר באתר: ${formatPrice(room.sitePrice)}\n`;
-      msg += `   🏷️ עם הנחה (5%): ${formatPrice(room.discountPrice)}\n`;
-      msg += `   ⭐ מחיר מועדון: <b>${formatPrice(room.clubPrice)}</b>\n`;
+    for (const flight of result.flights) {
+      msg += `   ✈️ ${flight.name}: <b>${formatPrice(flight.price, flight.currency)}</b>\n`;
     }
     msg += `\n🔗 <a href="${result.url}">להזמנה</a>\n`;
     msg += `━━━━━━━━━━━━━━━\n\n`;
@@ -321,29 +313,28 @@ function buildStatusMessage(results) {
 }
 
 function buildFirstRunMessage(results) {
-  let msg = `🎉 <b>שלום! התחלתי לעקוב אחרי המחירים עבורך!</b>\n\n`;
-  msg += `🏨 מלון <b>${HOTEL_NAME}</b>\n`;
+  let msg = `🎉 <b>שלום! התחלתי לעקוב אחרי מחירי הטיסות עבורך!</b>\n\n`;
+  msg += `✈️ <b>EL AL</b>\n`;
   msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const result of results) {
-    msg += `📅 <b>${result.dates}</b>\n`;
+    msg += `🛫 <b>${result.routeHebrew}</b>\n`;
+    msg += `📅 ${result.dates}\n\n`;
 
-    if (result.rooms.length === 0) {
-      msg += `   ⚠️ לא נמצאו חדרים זמינים\n\n`;
+    if (result.flights.length === 0) {
+      msg += `   ⚠️ לא נמצאו טיסות זמינות\n`;
+      msg += `   (ייתכן שהדף לא נטען כראוי - נסה שוב)\n\n`;
       continue;
     }
 
-    for (const room of result.rooms) {
-      msg += `\n🛏️ <b>${room.name}</b>\n`;
-      msg += `   💵 מחיר באתר: ${formatPrice(room.sitePrice)}\n`;
-      msg += `   🏷️ עם הנחה (5%): ${formatPrice(room.discountPrice)}\n`;
-      msg += `   ⭐ מחיר מועדון: <b>${formatPrice(room.clubPrice)}</b>\n`;
+    for (const flight of result.flights) {
+      msg += `   ✈️ ${flight.name}: <b>${formatPrice(flight.price, flight.currency)}</b>\n`;
     }
     msg += `\n🔗 <a href="${result.url}">להזמנה</a>\n`;
     msg += `━━━━━━━━━━━━━━━\n\n`;
   }
 
-  msg += `🔄 אני בודק את המחירים כל 15 דקות\n`;
+  msg += `🔄 אני בודק את המחירים פעם ביום\n`;
   msg += `📬 אשלח לך הודעה ברגע שיהיה שינוי!\n\n`;
   msg += `💡 <i>טיפ: אפשר להפעיל אותי ידנית מתי שתרצה לראות את המחירים העדכניים</i>`;
 
@@ -351,15 +342,14 @@ function buildFirstRunMessage(results) {
 }
 
 async function main() {
-  console.log("Starting price check...");
+  console.log("Starting EL AL flight price check...");
 
   const browser = await puppeteer.launch({
     headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
   });
 
   try {
-    // Check all searches
     const results = [];
     for (let i = 0; i < SEARCHES.length; i++) {
       const result = await checkSearch(browser, SEARCHES[i], i === 0);
@@ -399,9 +389,9 @@ async function main() {
 
       if (changes.length > 0) {
         hasChanges = true;
-        const msg = buildChangeMessage(result.dates, result.url, changes, result.rooms);
+        const msg = buildChangeMessage(result, changes);
         await sendTelegramMessage(msg);
-        console.log(`Sent change notification for ${result.dates}`);
+        console.log(`Sent change notification for ${result.route}`);
       }
     }
 

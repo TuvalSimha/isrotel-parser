@@ -1,34 +1,33 @@
-# 🏨 Isrotel Price Monitor
+# ✈️ EL AL Flight Price Monitor
 
-Automated price monitoring for [Isrotel](https://www.isrotel.co.il/) hotel rooms. Get instant Telegram notifications when prices change!
+Automated price monitoring for [EL AL](https://www.elal.com/) flights. Get instant Telegram notifications when prices change!
 
 ## ✨ Features
 
-- 🔄 **Automatic monitoring** - Checks prices every 5 minutes via GitHub Actions
+- 🔄 **Automatic monitoring** - Checks prices once daily via GitHub Actions
 - 📱 **Telegram notifications** - Instant alerts when prices change (up or down)
-- 🏷️ **All price types** - Tracks site price, discount price, and club member price
-- 📅 **Multiple dates** - Monitor several date ranges simultaneously
-- 🛏️ **Multiple rooms** - Tracks all available room types per date
+- 💵 **Multiple currencies** - Tracks prices in USD and ILS
+- 🛫 **Multiple routes** - Monitor several flight routes simultaneously
 
 ## 📸 Example Notification
 
 ```
-🔔 היי! יש שינוי במחיר!
+🔔 היי! יש שינוי במחיר הטיסה!
 
-🏨 מלון קדמא
-📅 תאריכים: 25-27/09/2026
+✈️ EL AL
+🛫 מסלול: תל אביב → בלגרד
+📅 תאריכים: 03-06/06/2025
 ━━━━━━━━━━━━━━━
 
-🛏️ חדר קדמא עם מרפסת
+✈️ Economy
 
-📉 ירד: מחיר מועדון
-   לפני: 4,045 ₪
-   עכשיו: 3,800 ₪ 🔻 -245 ₪
+📉 ירד:
+   לפני: $450
+   עכשיו: $380 🔻 -$70
 
 📊 כל המחירים העדכניים:
-   💵 באתר: 4,200 ₪
-   🏷️ עם הנחה: 3,990 ₪
-   ⭐ מועדון: 3,800 ₪
+   ✈️ Economy: $380
+   ✈️ Business: $1,200
 
 ━━━━━━━━━━━━━━━
 👉 לחצו כאן להזמנה
@@ -63,26 +62,26 @@ Add these secrets:
 | `TELEGRAM_BOT_TOKEN` | Your bot token from BotFather |
 | `TELEGRAM_CHAT_ID` | Your chat ID |
 
-### 5. Configure your dates and hotel
+### 5. Configure your flight search
 
 Edit `scripts/check-price.js` and update the `SEARCHES` array:
 
 ```javascript
 const SEARCHES = [
   {
-    id: "my-trip",
-    dates: "25-27/09/2026",
-    url: "https://www.isrotel.co.il/searchresult/...", // Your Isrotel search URL
+    id: "my-flight",
+    route: "TLV → BEG",
+    routeHebrew: "תל אביב → בלגרד",
+    dates: "03-06/06/2025",
+    url: "https://booking.elal.com/engine?...", // Your EL AL search URL
   },
-  // Add more date ranges as needed
+  // Add more routes as needed
 ];
-
-const HOTEL_NAME = "קדמא"; // Update hotel name
 ```
 
 **How to get the URL:**
-1. Go to [isrotel.co.il](https://www.isrotel.co.il/)
-2. Search for your desired hotel, dates, and guests
+1. Go to [elal.com](https://www.elal.com/)
+2. Search for your desired flight (origin, destination, dates, passengers)
 3. Copy the full URL from your browser
 
 ### 6. Enable GitHub Actions
@@ -91,7 +90,7 @@ Go to **Actions** tab → Click **"I understand my workflows, go ahead and enabl
 
 ### 7. Done! 🎉
 
-The monitor will check prices every 5 minutes and send you Telegram notifications when prices change.
+The monitor will check prices once daily (8:00 AM UTC / 11:00 AM Israel) and send you Telegram notifications when prices change.
 
 ## ⚙️ Configuration
 
@@ -101,23 +100,23 @@ Edit `.github/workflows/check-price.yml`:
 
 ```yaml
 schedule:
-  - cron: '*/5 * * * *'   # Every 5 minutes
-  # - cron: '*/15 * * * *' # Every 15 minutes
-  # - cron: '0 * * * *'    # Every hour
+  - cron: '0 8 * * *'     # Once daily at 8:00 AM UTC
+  # - cron: '0 */6 * * *'  # Every 6 hours
+  # - cron: '0 8,20 * * *' # Twice daily (8 AM and 8 PM UTC)
 ```
 
 ### Manual check
 
-Go to **Actions** → **Check Isrotel Price** → **Run workflow**
+Go to **Actions** → **Check EL AL Flight Price** → **Run workflow**
 
 This will send you a status message even if prices haven't changed.
 
 ## 🛠️ How It Works
 
 1. **GitHub Actions** runs the workflow on schedule
-2. **Puppeteer** (headless browser) loads the Isrotel page
+2. **Puppeteer** (headless browser) loads the EL AL booking page
 3. Waits for JavaScript to render the prices
-4. Extracts all room types and their prices
+4. Extracts flight options and their prices
 5. Compares with previously saved prices
 6. Sends **Telegram notification** if any price changed
 7. Saves current prices for next comparison
@@ -136,9 +135,16 @@ This will send you a status message even if prices haven't changed.
 ## ⚠️ Important Notes
 
 - **Public repo required** - GitHub Actions scheduled workflows don't work reliably on free private repos
-- **5-minute minimum** - GitHub Actions doesn't allow schedules more frequent than every 5 minutes
+- **Dynamic pages** - EL AL uses a complex booking engine; price extraction may need tuning
 - **Best effort timing** - Scheduled runs may be delayed during high GitHub load
 - **Secrets are safe** - Even in public repos, GitHub Secrets are encrypted and never exposed
+
+## 🔧 Troubleshooting
+
+If prices aren't being detected:
+1. Go to **Actions** → Select latest run → Download `debug-screenshot` artifact
+2. Check if the page loaded correctly
+3. You may need to adjust the wait times or price patterns in `check-price.js`
 
 ## 🤝 Contributing
 
@@ -150,4 +156,4 @@ MIT License - feel free to use and modify for your own needs.
 
 ---
 
-Made with ❤️ for finding the best hotel deals
+Made with ❤️ for finding the best flight deals

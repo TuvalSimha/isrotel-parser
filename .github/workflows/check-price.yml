@@ -1,7 +1,7 @@
-name: Check Isrotel Price
+name: Check EL AL Flight Price
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '0 8 * * *'  # Once daily at 8:00 AM UTC (11:00 AM Israel time)
   workflow_dispatch:
 
 jobs:
@@ -23,9 +23,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: last_prices.json
-          key: isrotel-price-${{ github.run_id }}
+          key: elal-price-${{ github.run_id }}
           restore-keys: |
-            isrotel-price-
+            elal-price-
 
       - name: Check price
         env:
@@ -43,9 +43,17 @@ jobs:
           path: debug-screenshot.png
           retention-days: 1
 
+      - name: Upload debug HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-html
+          path: debug-page.html
+          retention-days: 1
+
       - name: Save price cache
         uses: actions/cache/save@v4
         if: always()
         with:
           path: last_prices.json
-          key: isrotel-price-${{ github.run_id }}
+          key: elal-price-${{ github.run_id }}

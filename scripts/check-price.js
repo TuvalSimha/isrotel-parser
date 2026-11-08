@@ -198,12 +198,13 @@ async function checkSearch(browser, search, isFirst = false) {
 }
 
 function compareSearchResults(current, previous) {
-  if (!previous) return null;
+  // If no previous data or previous data has old format (flights array), treat as first run
+  if (!previous || !previous.outboundPrice) return null;
 
   const changes = {};
   let hasChanges = false;
 
-  if (current.outboundPrice !== previous.outboundPrice) {
+  if (current.outboundPrice && previous.outboundPrice && current.outboundPrice !== previous.outboundPrice) {
     changes.outbound = {
       previous: previous.outboundPrice,
       current: current.outboundPrice,
@@ -212,7 +213,7 @@ function compareSearchResults(current, previous) {
     hasChanges = true;
   }
 
-  if (current.returnPrice !== previous.returnPrice) {
+  if (current.returnPrice && previous.returnPrice && current.returnPrice !== previous.returnPrice) {
     changes.return = {
       previous: previous.returnPrice,
       current: current.returnPrice,
@@ -221,7 +222,7 @@ function compareSearchResults(current, previous) {
     hasChanges = true;
   }
 
-  if (current.totalUSD !== previous.totalUSD) {
+  if (current.totalUSD && previous.totalUSD && current.totalUSD !== previous.totalUSD) {
     changes.total = {
       previousUSD: previous.totalUSD,
       currentUSD: current.totalUSD,

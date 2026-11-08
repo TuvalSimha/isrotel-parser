@@ -1,5 +1,9 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-extra");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
 const fs = require("fs");
+
+// Add stealth plugin to avoid bot detection
+puppeteer.use(StealthPlugin());
 
 // Configuration - EL AL flight search
 const SEARCHES = [
@@ -7,7 +11,7 @@ const SEARCHES = [
     id: "tlv-beg-jun-3-6",
     route: "TLV → BEG",
     routeHebrew: "תל אביב → בלגרד",
-    dates: "03-06/06/2025",
+    dates: "03-06/06/2027",
     url: "https://booking.elal.com/engine?iT=MzEsMTM5LDgsMCwwLDAsMCwwLDAsMywyMzcsODcsMjA5LDE0NiwxNjIsNTYsMjAsMjUzLDI0LDIwMyw3MSw0NSw2NCw2OCwxMjEsMTc2LDQ0LDQsMjMzLDE5OCw4MSwxNTYsODYsMTkyLDIxNCwxNTEsMTc0LDAsODEsMjEwLDM0LDE4NCwzMywxMDYsMjM1LDIxNSw3OSwyLDEwLDExNiwxMzksMTgxLDUxLDkxLDE4NywxODEsNDcsMjUzLDk2LDc2LDIzOCwxODksNTcsNTcsNTUsMTU2LDE1NSw2NCwzMSw4OSw2MSwxMjAsMzAsNSwyMzgsMTQ3LDEzNSwxNjYsMTA0LDEwMCwyMTYsMjMsMTMxLDU1LDIwOSw3MiwxMTAsODIsMjI3LDE5Nyw5NSwyNCwyMTIsMTA0LDE0NCwxMDEsMTY0LDE3MSw5NiwyMDksODYsMTI5LDI5LDcyLDE2NiwzMCw3MCw2Myw0NiwxNTUsMjE0LDIwMyw4NiwxOTYsMTgyLDExMCw5NSwxNTYsMzksMTI1LDIzMyw1NiwxMjYsMjE5LDE0Miw3MCwxMzUsMTM3LDI0MywxMTQsNCwyMDYsMjQyLDEwNCw2MSwyMzcsMTk3LDE0OSwyMjQsODgsMTQyLDE5NywxNjEsMTc3LDU4LDE4Niw0NCw1LDI0OSwxODAsMTIyLDE1NywxNjAsMTA1LDE1MiwzMiwxMjMsNDMsNzksMTAyLDE0Miw2MCwxNzYsMTgyLDI0MiwxMTYsOTcsMjQzLDYzLDI5LDE5OSw5MiwyMTEsMTU5LDExMCwxNjMsMTQ1LDc5LDk5LDk5LDE4MywxMDEsMTE0LDE5OCwxMjMsMTQwLDIyMCwyMzEsMjQwLDIyOCwyMzcsMTg2LDE5NiwyMywxNTAsMjMxLDI0MSwyMzUsMTM4LDEyMCwxNzMsMjAxLDEwNSwxNjIsNDEsMTY3LDE1MSwxMTksMTU1LDk3LDE1OCwxNTEsMTM5LDI0NiwyMTQsMjEsNTYsNzAsMTIyLDQ5LDExNywyMDQsMTQ5LDE2NSwyNiwxMzcsMTc3LDExLDMsOTUsNTMsMTY0LDEzNywyMjksMTgxLDc3LDEwOSwyMDAsMTU1LDIxOCwyNDIsNjAsODUsNzksMTA0LDI0NSwyNiwxNTYsNDAsMjMwLDEzNSwxMjEsMjE3LDExNCwxOSwyMDMsMjIsMzksMjM5LDEzNCwxODQsMTI2LDEwNSwxOTAsMTA1LDE5MywyMTksMTA1LDE4LDczLDIwMSwxMjgsMTUyLDIzNSwxODMsMTU5LDMxLDEwMCw1OCwxMjYsMjE0LDIwOSwxMjYsNjcsNDYsMjM1LDE1MywyMSwyNTIsMjQ4LDI0OCwyMzUsNTMsMTA2LDIzNSwxMTEsMTUwLDE3MSwxMiwyMzYsOTAsMjIzLDIxMSwxMjMsMTE3LDY1LDExNiwyMjcsMTIwLDEzOSwxNjIsMTQxLDI2LDEzMCwzNiwxMjksNzMsOTMsMjI4LDIzNCw0NSwxMywxMjIsMTEzLDIwLDIzOSwyMDYsMTE3LDY1LDE2MiwxMzEsNjEsMTM0LDU5LDExNiwyMTYsMTAxLDMsMjQ3LDE0NCwxNjAsOCwzOCw3MywxODksNTMsMTYwLDYsMTMwLDIwOSwxNTgsMjA1LDE2LDE5Niw4LDIzNiwzMiwxMTcsMTk5LDcsMjI2LDE5OCwxMzUsMjAwLDE2NywxOTAsMjQsMTYzLDEzLDEzOCwxMCw4Nyw5MywxMDQsMTA3LDI5LDIxOCw0MCwyMjAsMTczLDM5LDE1LDI0MywxNTgsNzQsMjcsMzMsMTE5LDQwLDc0LDIyMiwxOSwyNDIsMTQ0LDExOCwxMTAsMTksMTE1LDE1NSwyNDgsMTA1LDE1NCwyMDQsMjMxLDYxLDI1MywxNzksMTYzLDEwLDE2NSwxNTUsMjE5LDIyOCwxMjMsNDcsMywxNDQsMTg4LDIxNiwxMDMsMTk2LDE3MywxNzcsNjcsNywzMywxMTIsOTcsMTUyLDE2NiwzMywyMzcsNjcsMjI0LDY1LDE5NSwxNzUsMTgzLDE0OCwyMzIsMTYsMTM0LDIwNCwyMywxMjMsMTI4LDE2MCwxNTIsMzcsMjM1LDMzLDExNCw0NiwzOSwxNTUsMTAzLDI0MiwzNyw2OSwxODUsMTM4LDE4MSw5MiwxODIsNzMsMTIsMjAyLDIwNCwyNDYsNDYsMTYzLDIyNCwyMDksMTU3LDM3LDE4NCwxMiw5NSwyMDQsODAsMjI4LDEzOCwxOTYsMTg0LDI0MiwyMjYsMTgzLDIzMyw4Nyw3Miw5OSw3Niw3NywzMiw2OCwzMiw5NywyNDgsNTIsNTMsMTk4LDc4LDU3LDE2Miw5OSw5MywyMDAsMTUyLDI2LDksNiwyMDQsMjUyLDIzMiwyMDksMjUyLDExMyw2Niw5NSwyMjYsMjU1LDEyOCwxMjIsNTQsNTEsMjIxLDEzMiw3MSwxMzksNDIsMTU3LDIyMCwxNjYsMTI0LDM4LDkyLDExMiw0MCwxMTYsMTYzLDE1MSwxMDksOTUsMzIsMTEsOTUsMjM1LDE1OCw4NywxMzcsMjM1LDE2Nyw1LDExMSwyNCwyMTcsMjU1LDU0LDEwOSwxMzcsMjMsMTIwLDU1LDc1LDAsNDgsMjE3LDYyLDEwMiw0Nyw0MywzNyw2NiwxMDUsMTAxLDE3NywxMzUsMTkxLDY0LDM2LDE1MiwxOTUsMzUsMTk2LDMyLDg0LDE2LDIyMiwxOTksMTUyLDM2LDEzMywyMzAsMTI0LDEzMiwxNjEsNzEsMjMyLDEyMCwxMywxOTQsNCwxNjYsMTgxLDgsMTA0LDE4NSwyMSw5OSwyMzksMTI4LDQ5LDE0MCwxODgsMTc5LDE1NCwxNjksMjE2LDI0LDIwNyw1MSwxMDAsMzEsMzgsNCw2OSw1NSwxODksNjIsNDYsMjA2LDE3MCw3NiwxMzksMjUwLDgwLDMxLDIxMyw5NiwxNzcsODUsMTI0LDExNywyNDAsMTczLDE3Miw2LDE5NSwxNjcsMTI3LDkyLDg2LDExNCwyMSwxMTgsOTQsMjI4LDM3LDI1LDE4MSw2MiwyMTUsODEsMTgyLDIzMCwxMjUsMjksMjEsOTIsNzUsMTE1LDE3MSwxMDAsNDQsMjIyLDIxMywyMDksMTA4LDk0LDE3MCwxNjMsMjAsNjMsMTIzLDIwMCwyNDMsMjI1LDEwOCw5NiwyMjgsMjAyLDI0LDEyLDE5OSw3OSw1MSw2OSwxODcsMTcxLDE2NiwxMCwyNTMsMTc4LDM1LDIzOSwxMzksNzgsOTAsMjEsODEsMjIxLDEyMywxNDAsNjYsMTg2LDc2LDE2NiwxMjcsMTkxLDE0Niw5MiwxMTMsMjA0LDg2LDczLDE1NywyMzgsMjM2LDEyNywxNjMsMjAxLDE2MSw2MSwxNjMsNzAsMjA0LDIyNCwxOCwyMjQsMTM0LDIxMiwxNjQsMTYsMTI0LDEyOCw4NywxNTcsMiwxOTQsOTgsNCw3OCwyMzIsNTIsNTYsMTY5LDE5MywxODEsNDQsMTQyLDk0LDc3LDIwMiwxODEsMTA1LDExNCwyOCwxODMsMjAyLDIsMTEsMjEsOTksNzIsMTQsNTYsMjYsMjUyLDI1NCw1LDI0NCwxNzMsMjQxLDExMSwxNDEsMjU1LDE3NSwyNiwyNTUsMjA1LDE3OSwyNDgsMjUxLDY5LDIzMywxNDUsODgsMTkxLDk1LDE0OCwyMDIsMjAzLDEyNCwxOTEsNDAsMjUzLDE1NSw0Nyw3NCw5NSw0NiwzMiwxNjksMjUwLDIsNzQsOTksMjQ3LDU2LDIyMiwxOTcsODcsMCw1NCwxMDAsMjIzLDgyLDIwOSwxMzQsMTUwLDYwLDg1LDI1MCwxMjQsMTY2LDE3OCwyNSwyMTIsMTcyLDEwNCwyMiwyMzcsNDksMjAxLDI2LDE2NiwxMjYsMTgxLDE2OSwyMDcsOTAsMjE4LDE4NywxMjYsNzksMTI5LDM1LDEyLDE3MywyNDMsNjIsMTg5LDIwNSwyMTYsNjEsMjQ2LDE1MCwxMjYsOTgsOSwxOCw3NCwyNDQsMTYsMTI2LDMyLDEyMiwxMjgsMjA0LDMzLDE5Miw5NCw4MCwyMjYsMTI3LDYxLDU0LDM2LDgsMzcsNzgsMTQ0LDE4NSwxMzQsMjM5LDExOCwyMTUsMTMsMTU4LDk1LDI0MywxNDEsMTEwLDg3LDIyNCwyNiwyMzUsNzgsODcsMTUwLDEyOCwyMzUsMjQzLDI5LDIxNSw3NywxNTMsMzQsMTUsMTA2LDQwLDE2MSwxODEsMTIxLDg2LDE1MiwxNjQsNjEsMTQ0LDQsMjEyLDE1OCwxNjQsMTc2LDkwLDE1OCwxNzksNjgsMzMsMjYsOTIsMjE1LDIyNiwzNyw3MCw4OSwxMDAsMTMsMjIzLDIwLDIxOCwxNTcsODUsMTczLDE5MSwyMTksMjQ2LDE0MCwxMTMsMTczLDMxLDEzMCwxNjgsMjMsMTkyLDkwLDEyNywxMzEsMTIzLDE4MSwyNTQsMTU4LDI0NCw1NiwyMTgsMjI2LDE1MiwyNTMsMTMzLDE3Miw5LDIyNiwyOSwyMzYsNSwxMzIsMjM2LDIxNywxNzksMTY4LDExLDg0LDQ1LDI1MCwyMzMsMTE2LDEwNiwxOTQsMTYsMTMyLDc3LDQ3LDE2NiwxNTksMTQ3LDEyMiwwLDQxLDMzLDI5LDE2NSwyMjksNjcsMjI3LDE1LDE2MCwxMDMsMiwxNzksMjE0LDE0Myw5NiwxNDMsMTc1LDI0NSwxLDEwMiwzMiwyMjIsMjE4LDEwMywxMzEsNjEsMjUzLDE2MywxOTAsOTUsMTk3LDE5MCw1MSwyMzMsMjE4LDE1LDAsMA%3D%3D",
   },
 ];
@@ -59,7 +63,7 @@ async function extractFlightsFromPage(page) {
 
   // Save HTML for debugging
   fs.writeFileSync("debug-page.html", html);
-  console.log("Saved page HTML for debugging");
+  console.log("Saved page HTML for debugging (", html.length, "bytes)");
 
   const flights = [];
 
@@ -135,6 +139,7 @@ async function extractFlightsFromPage(page) {
     /lite|לייט/gi,
     /classic|קלאסיק/gi,
     /flex|גמיש/gi,
+    /תיירים/gi,
   ];
 
   const classNames = [];
@@ -167,24 +172,41 @@ async function checkSearch(browser, search, isFirst = false) {
 
   const page = await browser.newPage();
 
+  // Set realistic user agent
+  await page.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  );
+
   await page.setExtraHTTPHeaders({
-    "Accept-Language": "he-IL,he;q=0.9,en;q=0.8",
+    "Accept-Language": "he-IL,he;q=0.9,en-US;q=0.8,en;q=0.7",
+    Accept:
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    Connection: "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
   });
 
-  // Set viewport to ensure full page renders
+  // Set viewport to look like a real browser
   await page.setViewport({ width: 1920, height: 1080 });
 
   try {
     console.log("Navigating to:", search.url);
-    await page.goto(search.url, { waitUntil: "networkidle2", timeout: 90000 });
+    await page.goto(search.url, { waitUntil: "networkidle2", timeout: 120000 });
 
     // Wait for page to fully load
     console.log("Waiting for page to render...");
-    await new Promise((r) => setTimeout(r, 10000));
+    await new Promise((r) => setTimeout(r, 15000));
 
     // Try to wait for price elements
     try {
-      await page.waitForSelector('[class*="price"], [class*="fare"], [class*="total"]', { timeout: 20000 });
+      await page.waitForSelector('[class*="price"], [class*="fare"], [class*="total"], [class*="amount"]', {
+        timeout: 30000,
+      });
       console.log("Found price-related elements");
     } catch (e) {
       console.log("No specific price selectors found, continuing...");
@@ -346,7 +368,15 @@ async function main() {
 
   const browser = await puppeteer.launch({
     headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-blink-features=AutomationControlled",
+      "--disable-infobars",
+      "--window-size=1920,1080",
+      "--start-maximized",
+    ],
   });
 
   try {

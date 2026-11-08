@@ -16,8 +16,8 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install Puppeteer
-        run: npm install puppeteer
+      - name: Install dependencies
+        run: npm install
 
       - name: Restore price cache
         uses: actions/cache/restore@v4

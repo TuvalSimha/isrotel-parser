@@ -5,13 +5,20 @@ const fs = require("fs");
 // Add stealth plugin to avoid bot detection
 puppeteer.use(StealthPlugin());
 
+// USD to ILS exchange rate (update as needed)
+const USD_TO_ILS = 3.7;
+
 // Configuration - EL AL flight search
 const SEARCHES = [
   {
     id: "tlv-beg-jun-3-6",
-    route: "TLV → BEG",
-    routeHebrew: "תל אביב → בלגרד",
-    dates: "03-06/06/2027",
+    route: "TLV ↔ BEG",
+    outbound: "TLV → BEG",
+    return: "BEG → TLV",
+    outboundHebrew: "תל אביב → בלגרד",
+    returnHebrew: "בלגרד → תל אביב",
+    outboundDate: "03/06/2027",
+    returnDate: "06/06/2027",
     url: "https://booking.elal.com/engine?iT=MzEsMTM5LDgsMCwwLDAsMCwwLDAsMywyMzcsODcsMjA5LDE0NiwxNjIsNTYsMjAsMjUzLDI0LDIwMyw3MSw0NSw2NCw2OCwxMjEsMTc2LDQ0LDQsMjMzLDE5OCw4MSwxNTYsODYsMTkyLDIxNCwxNTEsMTc0LDAsODEsMjEwLDM0LDE4NCwzMywxMDYsMjM1LDIxNSw3OSwyLDEwLDExNiwxMzksMTgxLDUxLDkxLDE4NywxODEsNDcsMjUzLDk2LDc2LDIzOCwxODksNTcsNTcsNTUsMTU2LDE1NSw2NCwzMSw4OSw2MSwxMjAsMzAsNSwyMzgsMTQ3LDEzNSwxNjYsMTA0LDEwMCwyMTYsMjMsMTMxLDU1LDIwOSw3MiwxMTAsODIsMjI3LDE5Nyw5NSwyNCwyMTIsMTA0LDE0NCwxMDEsMTY0LDE3MSw5NiwyMDksODYsMTI5LDI5LDcyLDE2NiwzMCw3MCw2Myw0NiwxNTUsMjE0LDIwMyw4NiwxOTYsMTgyLDExMCw5NSwxNTYsMzksMTI1LDIzMyw1NiwxMjYsMjE5LDE0Miw3MCwxMzUsMTM3LDI0MywxMTQsNCwyMDYsMjQyLDEwNCw2MSwyMzcsMTk3LDE0OSwyMjQsODgsMTQyLDE5NywxNjEsMTc3LDU4LDE4Niw0NCw1LDI0OSwxODAsMTIyLDE1NywxNjAsMTA1LDE1MiwzMiwxMjMsNDMsNzksMTAyLDE0Miw2MCwxNzYsMTgyLDI0MiwxMTYsOTcsMjQzLDYzLDI5LDE5OSw5MiwyMTEsMTU5LDExMCwxNjMsMTQ1LDc5LDk5LDk5LDE4MywxMDEsMTE0LDE5OCwxMjMsMTQwLDIyMCwyMzEsMjQwLDIyOCwyMzcsMTg2LDE5NiwyMywxNTAsMjMxLDI0MSwyMzUsMTM4LDEyMCwxNzMsMjAxLDEwNSwxNjIsNDEsMTY3LDE1MSwxMTksMTU1LDk3LDE1OCwxNTEsMTM5LDI0NiwyMTQsMjEsNTYsNzAsMTIyLDQ5LDExNywyMDQsMTQ5LDE2NSwyNiwxMzcsMTc3LDExLDMsOTUsNTMsMTY0LDEzNywyMjksMTgxLDc3LDEwOSwyMDAsMTU1LDIxOCwyNDIsNjAsODUsNzksMTA0LDI0NSwyNiwxNTYsNDAsMjMwLDEzNSwxMjEsMjE3LDExNCwxOSwyMDMsMjIsMzksMjM5LDEzNCwxODQsMTI2LDEwNSwxOTAsMTA1LDE5MywyMTksMTA1LDE4LDczLDIwMSwxMjgsMTUyLDIzNSwxODMsMTU5LDMxLDEwMCw1OCwxMjYsMjE0LDIwOSwxMjYsNjcsNDYsMjM1LDE1MywyMSwyNTIsMjQ4LDI0OCwyMzUsNTMsMTA2LDIzNSwxMTEsMTUwLDE3MSwxMiwyMzYsOTAsMjIzLDIxMSwxMjMsMTE3LDY1LDExNiwyMjcsMTIwLDEzOSwxNjIsMTQxLDI2LDEzMCwzNiwxMjksNzMsOTMsMjI4LDIzNCw0NSwxMywxMjIsMTEzLDIwLDIzOSwyMDYsMTE3LDY1LDE2MiwxMzEsNjEsMTM0LDU5LDExNiwyMTYsMTAxLDMsMjQ3LDE0NCwxNjAsOCwzOCw3MywxODksNTMsMTYwLDYsMTMwLDIwOSwxNTgsMjA1LDE2LDE5Niw4LDIzNiwzMiwxMTcsMTk5LDcsMjI2LDE5OCwxMzUsMjAwLDE2NywxOTAsMjQsMTYzLDEzLDEzOCwxMCw4Nyw5MywxMDQsMTA3LDI5LDIxOCw0MCwyMjAsMTczLDM5LDE1LDI0MywxNTgsNzQsMjcsMzMsMTE5LDQwLDc0LDIyMiwxOSwyNDIsMTQ0LDExOCwxMTAsMTksMTE1LDE1NSwyNDgsMTA1LDE1NCwyMDQsMjMxLDYxLDI1MywxNzksMTYzLDEwLDE2NSwxNTUsMjE5LDIyOCwxMjMsNDcsMywxNDQsMTg4LDIxNiwxMDMsMTk2LDE3MywxNzcsNjcsNywzMywxMTIsOTcsMTUyLDE2NiwzMywyMzcsNjcsMjI0LDY1LDE5NSwxNzUsMTgzLDE0OCwyMzIsMTYsMTM0LDIwNCwyMywxMjMsMTI4LDE2MCwxNTIsMzcsMjM1LDMzLDExNCw0NiwzOSwxNTUsMTAzLDI0MiwzNyw2OSwxODUsMTM4LDE4MSw5MiwxODIsNzMsMTIsMjAyLDIwNCwyNDYsNDYsMTYzLDIyNCwyMDksMTU3LDM3LDE4NCwxMiw5NSwyMDQsODAsMjI4LDEzOCwxOTYsMTg0LDI0MiwyMjYsMTgzLDIzMyw4Nyw3Miw5OSw3Niw3NywzMiw2OCwzMiw5NywyNDgsNTIsNTMsMTk4LDc4LDU3LDE2Miw5OSw5MywyMDAsMTUyLDI2LDksNiwyMDQsMjUyLDIzMiwyMDksMjUyLDExMyw2Niw5NSwyMjYsMjU1LDEyOCwxMjIsNTQsNTEsMjIxLDEzMiw3MSwxMzksNDIsMTU3LDIyMCwxNjYsMTI0LDM4LDkyLDExMiw0MCwxMTYsMTYzLDE1MSwxMDksOTUsMzIsMTEsOTUsMjM1LDE1OCw4NywxMzcsMjM1LDE2Nyw1LDExMSwyNCwyMTcsMjU1LDU0LDEwOSwxMzcsMjMsMTIwLDU1LDc1LDAsNDgsMjE3LDYyLDEwMiw0Nyw0MywzNyw2NiwxMDUsMTAxLDE3NywxMzUsMTkxLDY0LDM2LDE1MiwxOTUsMzUsMTk2LDMyLDg0LDE2LDIyMiwxOTksMTUyLDM2LDEzMywyMzAsMTI0LDEzMiwxNjEsNzEsMjMyLDEyMCwxMywxOTQsNCwxNjYsMTgxLDgsMTA0LDE4NSwyMSw5OSwyMzksMTI4LDQ5LDE0MCwxODgsMTc5LDE1NCwxNjksMjE2LDI0LDIwNyw1MSwxMDAsMzEsMzgsNCw2OSw1NSwxODksNjIsNDYsMjA2LDE3MCw3NiwxMzksMjUwLDgwLDMxLDIxMyw5NiwxNzcsODUsMTI0LDExNywyNDAsMTczLDE3Miw2LDE5NSwxNjcsMTI3LDkyLDg2LDExNCwyMSwxMTgsOTQsMjI4LDM3LDI1LDE4MSw2MiwyMTUsODEsMTgyLDIzMCwxMjUsMjksMjEsOTIsNzUsMTE1LDE3MSwxMDAsNDQsMjIyLDIxMywyMDksMTA4LDk0LDE3MCwxNjMsMjAsNjMsMTIzLDIwMCwyNDMsMjI1LDEwOCw5NiwyMjgsMjAyLDI0LDEyLDE5OSw3OSw1MSw2OSwxODcsMTcxLDE2NiwxMCwyNTMsMTc4LDM1LDIzOSwxMzksNzgsOTAsMjEsODEsMjIxLDEyMywxNDAsNjYsMTg2LDc2LDE2NiwxMjcsMTkxLDE0Niw5MiwxMTMsMjA0LDg2LDczLDE1NywyMzgsMjM2LDEyNywxNjMsMjAxLDE2MSw2MSwxNjMsNzAsMjA0LDIyNCwxOCwyMjQsMTM0LDIxMiwxNjQsMTYsMTI0LDEyOCw4NywxNTcsMiwxOTQsOTgsNCw3OCwyMzIsNTIsNTYsMTY5LDE5MywxODEsNDQsMTQyLDk0LDc3LDIwMiwxODEsMTA1LDExNCwyOCwxODMsMjAyLDIsMTEsMjEsOTksNzIsMTQsNTYsMjYsMjUyLDI1NCw1LDI0NCwxNzMsMjQxLDExMSwxNDEsMjU1LDE3NSwyNiwyNTUsMjA1LDE3OSwyNDgsMjUxLDY5LDIzMywxNDUsODgsMTkxLDk1LDE0OCwyMDIsMjAzLDEyNCwxOTEsNDAsMjUzLDE1NSw0Nyw3NCw5NSw0NiwzMiwxNjksMjUwLDIsNzQsOTksMjQ3LDU2LDIyMiwxOTcsODcsMCw1NCwxMDAsMjIzLDgyLDIwOSwxMzQsMTUwLDYwLDg1LDI1MCwxMjQsMTY2LDE3OCwyNSwyMTIsMTcyLDEwNCwyMiwyMzcsNDksMjAxLDI2LDE2NiwxMjYsMTgxLDE2OSwyMDcsOTAsMjE4LDE4NywxMjYsNzksMTI5LDM1LDEyLDE3MywyNDMsNjIsMTg5LDIwNSwyMTYsNjEsMjQ2LDE1MCwxMjYsOTgsOSwxOCw3NCwyNDQsMTYsMTI2LDMyLDEyMiwxMjgsMjA0LDMzLDE5Miw5NCw4MCwyMjYsMTI3LDYxLDU0LDM2LDgsMzcsNzgsMTQ0LDE4NSwxMzQsMjM5LDExOCwyMTUsMTMsMTU4LDk1LDI0MywxNDEsMTEwLDg3LDIyNCwyNiwyMzUsNzgsODcsMTUwLDEyOCwyMzUsMjQzLDI5LDIxNSw3NywxNTMsMzQsMTUsMTA2LDQwLDE2MSwxODEsMTIxLDg2LDE1MiwxNjQsNjEsMTQ0LDQsMjEyLDE1OCwxNjQsMTc2LDkwLDE1OCwxNzksNjgsMzMsMjYsOTIsMjE1LDIyNiwzNyw3MCw4OSwxMDAsMTMsMjIzLDIwLDIxOCwxNTcsODUsMTczLDE5MSwyMTksMjQ2LDE0MCwxMTMsMTczLDMxLDEzMCwxNjgsMjMsMTkyLDkwLDEyNywxMzEsMTIzLDE4MSwyNTQsMTU4LDI0NCw1NiwyMTgsMjI2LDE1MiwyNTMsMTMzLDE3Miw5LDIyNiwyOSwyMzYsNSwxMzIsMjM2LDIxNywxNzksMTY4LDExLDg0LDQ1LDI1MCwyMzMsMTE2LDEwNiwxOTQsMTYsMTMyLDc3LDQ3LDE2NiwxNTksMTQ3LDEyMiwwLDQxLDMzLDI5LDE2NSwyMjksNjcsMjI3LDE1LDE2MCwxMDMsMiwxNzksMjE0LDE0Myw5NiwxNDMsMTc1LDI0NSwxLDEwMiwzMiwyMjIsMjE4LDEwMywxMzEsNjEsMjUzLDE2MywxOTAsOTUsMTk3LDE5MCw1MSwyMzMsMjE4LDE1LDAsMA%3D%3D",
   },
 ];
@@ -43,18 +50,16 @@ async function sendTelegramMessage(message) {
   return data.ok;
 }
 
-function formatPrice(price, currency = "USD") {
-  if (currency === "ILS" || currency === "₪") {
-    return `${price.toLocaleString("he-IL")} ₪`;
-  }
+function formatUSD(price) {
   return `$${price.toLocaleString("en-US")}`;
 }
 
-function formatDiff(diff, currency = "USD") {
+function formatILS(price) {
+  return `${Math.round(price).toLocaleString("he-IL")} ₪`;
+}
+
+function formatDiffUSD(diff) {
   const sign = diff > 0 ? "+" : "";
-  if (currency === "ILS" || currency === "₪") {
-    return `${sign}${diff.toLocaleString("he-IL")} ₪`;
-  }
   return `${sign}$${diff.toLocaleString("en-US")}`;
 }
 
@@ -65,110 +70,50 @@ async function extractFlightsFromPage(page) {
   fs.writeFileSync("debug-page.html", html);
   console.log("Saved page HTML for debugging (", html.length, "bytes)");
 
-  const flights = [];
-
-  // Try multiple price extraction patterns for EL AL
-  const allPrices = [];
+  // Try to extract USD prices
+  const usdPrices = [];
   let match;
 
-  // Pattern 1: USD prices ($XXX or $X,XXX)
+  // Pattern: $XXX or $X,XXX
   const usdPattern = /\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g;
   while ((match = usdPattern.exec(html)) !== null) {
     const price = parseFloat(match[1].replace(/,/g, ""));
-    if (price > 50 && price < 10000) {
-      allPrices.push({ price, currency: "USD" });
+    if (price > 50 && price < 5000) {
+      usdPrices.push(price);
     }
   }
 
-  // Pattern 2: ILS prices (₪XXX or XXX ₪)
-  const ilsPattern1 = /₪\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g;
-  while ((match = ilsPattern1.exec(html)) !== null) {
-    const price = parseFloat(match[1].replace(/,/g, ""));
-    if (price > 100 && price < 50000) {
-      allPrices.push({ price, currency: "ILS" });
-    }
-  }
-
-  const ilsPattern2 = /(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*₪/g;
-  while ((match = ilsPattern2.exec(html)) !== null) {
-    const price = parseFloat(match[1].replace(/,/g, ""));
-    if (price > 100 && price < 50000) {
-      allPrices.push({ price, currency: "ILS" });
-    }
-  }
-
-  // Pattern 3: Look for price in data attributes or JSON
-  const jsonPricePattern = /"price":\s*(\d+(?:\.\d+)?)/g;
-  while ((match = jsonPricePattern.exec(html)) !== null) {
-    const price = parseFloat(match[1]);
-    if (price > 50 && price < 50000) {
-      allPrices.push({ price, currency: "USD" });
-    }
-  }
-
-  // Pattern 4: Total price patterns
-  const totalPattern = /total[^>]*>?\s*\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/gi;
-  while ((match = totalPattern.exec(html)) !== null) {
-    const price = parseFloat(match[1].replace(/,/g, ""));
-    if (price > 50 && price < 10000) {
-      allPrices.push({ price, currency: "USD" });
-    }
-  }
-
-  console.log("All prices found:", allPrices);
+  console.log("USD prices found:", usdPrices);
 
   // Remove duplicates and sort
-  const uniquePrices = [];
-  const seen = new Set();
-  for (const p of allPrices) {
-    const key = `${p.price}-${p.currency}`;
-    if (!seen.has(key)) {
-      seen.add(key);
-      uniquePrices.push(p);
-    }
-  }
-  uniquePrices.sort((a, b) => a.price - b.price);
+  const uniquePrices = [...new Set(usdPrices)].sort((a, b) => a - b);
+  console.log("Unique USD prices:", uniquePrices);
 
-  console.log("Unique prices:", uniquePrices);
+  // For round-trip: expect 2 prices (outbound and return)
+  // Take the two lowest distinct prices as the likely flight prices
+  let outboundPrice = null;
+  let returnPrice = null;
 
-  // Extract flight class names if available
-  const classPatterns = [
-    /economy|כלכלית/gi,
-    /business|עסקים/gi,
-    /premium|פרימיום/gi,
-    /lite|לייט/gi,
-    /classic|קלאסיק/gi,
-    /flex|גמיש/gi,
-    /תיירים/gi,
-  ];
-
-  const classNames = [];
-  for (const pattern of classPatterns) {
-    if (pattern.test(html)) {
-      classNames.push(pattern.source.split("|")[0]);
-    }
+  if (uniquePrices.length >= 2) {
+    // First two prices are likely outbound and return
+    outboundPrice = uniquePrices[0];
+    returnPrice = uniquePrices[1];
+  } else if (uniquePrices.length === 1) {
+    // Only one price found - might be same for both directions
+    outboundPrice = uniquePrices[0];
+    returnPrice = uniquePrices[0];
   }
 
-  console.log("Flight classes found:", classNames);
-
-  // Build flight options from prices
-  if (uniquePrices.length > 0) {
-    // Group by likely fare classes (lowest prices first)
-    for (let i = 0; i < Math.min(uniquePrices.length, 5); i++) {
-      const p = uniquePrices[i];
-      flights.push({
-        name: classNames[i] || `Option ${i + 1}`,
-        price: p.price,
-        currency: p.currency,
-      });
-    }
-  }
-
-  return flights;
+  return {
+    outboundPrice,
+    returnPrice,
+    totalUSD: outboundPrice && returnPrice ? outboundPrice + returnPrice : null,
+    totalILS: outboundPrice && returnPrice ? Math.round((outboundPrice + returnPrice) * USD_TO_ILS) : null,
+  };
 }
 
 async function checkSearch(browser, search, isFirst = false) {
-  console.log(`\nChecking ${search.route} (${search.dates})...`);
+  console.log(`\nChecking ${search.route}...`);
 
   const page = await browser.newPage();
 
@@ -179,8 +124,7 @@ async function checkSearch(browser, search, isFirst = false) {
 
   await page.setExtraHTTPHeaders({
     "Accept-Language": "he-IL,he;q=0.9,en-US;q=0.8,en;q=0.7",
-    Accept:
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
     "Accept-Encoding": "gzip, deflate, br",
     Connection: "keep-alive",
     "Upgrade-Insecure-Requests": "1",
@@ -191,18 +135,15 @@ async function checkSearch(browser, search, isFirst = false) {
     "Cache-Control": "max-age=0",
   });
 
-  // Set viewport to look like a real browser
   await page.setViewport({ width: 1920, height: 1080 });
 
   try {
     console.log("Navigating to:", search.url);
     await page.goto(search.url, { waitUntil: "networkidle2", timeout: 120000 });
 
-    // Wait for page to fully load
     console.log("Waiting for page to render...");
     await new Promise((r) => setTimeout(r, 15000));
 
-    // Try to wait for price elements
     try {
       await page.waitForSelector('[class*="price"], [class*="fare"], [class*="total"], [class*="amount"]', {
         timeout: 30000,
@@ -212,26 +153,43 @@ async function checkSearch(browser, search, isFirst = false) {
       console.log("No specific price selectors found, continuing...");
     }
 
-    // Additional wait for dynamic content
     await new Promise((r) => setTimeout(r, 5000));
 
-    // Take screenshot
+    // Scroll down to ensure return flight section is loaded
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight / 2);
+    });
+    await new Promise((r) => setTimeout(r, 2000));
+    await page.evaluate(() => {
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+    await new Promise((r) => setTimeout(r, 2000));
+    await page.evaluate(() => {
+      window.scrollTo(0, 0);
+    });
+
     if (isFirst) {
       await page.screenshot({ path: "debug-screenshot.png", fullPage: true });
       console.log("Screenshot saved");
     }
 
-    // Extract flights and prices
-    const flights = await extractFlightsFromPage(page);
-    console.log(`Found ${flights.length} flight options for ${search.route}:`, flights);
+    const prices = await extractFlightsFromPage(page);
+    console.log(`Extracted prices for ${search.route}:`, prices);
 
     return {
       id: search.id,
       route: search.route,
-      routeHebrew: search.routeHebrew,
-      dates: search.dates,
+      outbound: search.outbound,
+      return: search.return,
+      outboundHebrew: search.outboundHebrew,
+      returnHebrew: search.returnHebrew,
+      outboundDate: search.outboundDate,
+      returnDate: search.returnDate,
       url: search.url,
-      flights: flights,
+      outboundPrice: prices.outboundPrice,
+      returnPrice: prices.returnPrice,
+      totalUSD: prices.totalUSD,
+      totalILS: prices.totalILS,
       timestamp: new Date().toISOString(),
     };
   } finally {
@@ -240,64 +198,106 @@ async function checkSearch(browser, search, isFirst = false) {
 }
 
 function compareSearchResults(current, previous) {
-  const changes = [];
+  if (!previous) return null;
 
-  if (!previous) return changes;
+  const changes = {};
+  let hasChanges = false;
 
-  const prevFlightsMap = new Map(previous.flights.map((f) => [f.name, f]));
-
-  for (const flight of current.flights) {
-    const prevFlight = prevFlightsMap.get(flight.name);
-
-    if (!prevFlight) {
-      changes.push({
-        flightName: flight.name,
-        type: "new",
-        current: flight,
-      });
-      continue;
-    }
-
-    if (flight.price !== prevFlight.price) {
-      changes.push({
-        flightName: flight.name,
-        type: "changed",
-        current: flight.price,
-        previous: prevFlight.price,
-        currency: flight.currency,
-        diff: flight.price - prevFlight.price,
-      });
-    }
+  if (current.outboundPrice !== previous.outboundPrice) {
+    changes.outbound = {
+      previous: previous.outboundPrice,
+      current: current.outboundPrice,
+      diff: current.outboundPrice - previous.outboundPrice,
+    };
+    hasChanges = true;
   }
 
-  return changes;
+  if (current.returnPrice !== previous.returnPrice) {
+    changes.return = {
+      previous: previous.returnPrice,
+      current: current.returnPrice,
+      diff: current.returnPrice - previous.returnPrice,
+    };
+    hasChanges = true;
+  }
+
+  if (current.totalUSD !== previous.totalUSD) {
+    changes.total = {
+      previousUSD: previous.totalUSD,
+      currentUSD: current.totalUSD,
+      diffUSD: current.totalUSD - previous.totalUSD,
+      previousILS: previous.totalILS,
+      currentILS: current.totalILS,
+    };
+    hasChanges = true;
+  }
+
+  return hasChanges ? changes : null;
+}
+
+function buildPriceBlock(result) {
+  let msg = "";
+
+  if (result.outboundPrice && result.returnPrice) {
+    msg += `🛫 <b>טיסת הלוך</b> (${result.outboundHebrew})\n`;
+    msg += `   📅 ${result.outboundDate}\n`;
+    msg += `   💵 ${formatUSD(result.outboundPrice)}\n\n`;
+
+    msg += `🛬 <b>טיסת חזור</b> (${result.returnHebrew})\n`;
+    msg += `   📅 ${result.returnDate}\n`;
+    msg += `   💵 ${formatUSD(result.returnPrice)}\n\n`;
+
+    msg += `━━━━━━━━━━━━━━━\n`;
+    msg += `💰 <b>סה"כ:</b>\n`;
+    msg += `   💵 ${formatUSD(result.totalUSD)}\n`;
+    msg += `   💴 ${formatILS(result.totalILS)}\n`;
+  } else {
+    msg += `   ⚠️ לא נמצאו מחירים\n`;
+    msg += `   (ייתכן שהדף לא נטען כראוי)\n`;
+  }
+
+  return msg;
 }
 
 function buildChangeMessage(result, changes) {
   let msg = `🔔 <b>היי! יש שינוי במחיר הטיסה!</b>\n\n`;
-  msg += `✈️ <b>EL AL</b>\n`;
-  msg += `🛫 מסלול: <b>${result.routeHebrew}</b>\n`;
-  msg += `📅 תאריכים: <b>${result.dates}</b>\n`;
+  msg += `✈️ <b>EL AL</b> | ${result.route}\n`;
   msg += `━━━━━━━━━━━━━━━\n\n`;
 
-  for (const change of changes) {
-    if (change.type === "new") {
-      msg += `🆕 <b>${change.flightName}</b> (אפשרות חדשה!)\n`;
-      msg += `   💵 מחיר: ${formatPrice(change.current.price, change.current.currency)}\n\n`;
-    } else {
-      const emoji = change.diff > 0 ? "📈 עלה" : "📉 ירד";
-      const diffEmoji = change.diff > 0 ? "🔺" : "🔻";
-      msg += `✈️ <b>${change.flightName}</b>\n\n`;
-      msg += `${emoji}:\n`;
-      msg += `   לפני: <s>${formatPrice(change.previous, change.currency)}</s>\n`;
-      msg += `   עכשיו: <b>${formatPrice(change.current, change.currency)}</b> ${diffEmoji} ${formatDiff(change.diff, change.currency)}\n\n`;
-    }
+  if (changes.outbound) {
+    const emoji = changes.outbound.diff > 0 ? "📈" : "📉";
+    const diffEmoji = changes.outbound.diff > 0 ? "🔺" : "🔻";
+    msg += `🛫 <b>טיסת הלוך</b> (${result.outboundHebrew})\n`;
+    msg += `   📅 ${result.outboundDate}\n`;
+    msg += `   ${emoji} לפני: <s>${formatUSD(changes.outbound.previous)}</s>\n`;
+    msg += `   ${emoji} עכשיו: <b>${formatUSD(changes.outbound.current)}</b> ${diffEmoji} ${formatDiffUSD(changes.outbound.diff)}\n\n`;
+  } else if (result.outboundPrice) {
+    msg += `🛫 <b>טיסת הלוך</b> (${result.outboundHebrew})\n`;
+    msg += `   📅 ${result.outboundDate}\n`;
+    msg += `   💵 ${formatUSD(result.outboundPrice)} (ללא שינוי)\n\n`;
   }
 
-  // Show all current prices
-  msg += `📊 <b>כל המחירים העדכניים:</b>\n`;
-  for (const flight of result.flights) {
-    msg += `   ✈️ ${flight.name}: <b>${formatPrice(flight.price, flight.currency)}</b>\n`;
+  if (changes.return) {
+    const emoji = changes.return.diff > 0 ? "📈" : "📉";
+    const diffEmoji = changes.return.diff > 0 ? "🔺" : "🔻";
+    msg += `🛬 <b>טיסת חזור</b> (${result.returnHebrew})\n`;
+    msg += `   📅 ${result.returnDate}\n`;
+    msg += `   ${emoji} לפני: <s>${formatUSD(changes.return.previous)}</s>\n`;
+    msg += `   ${emoji} עכשיו: <b>${formatUSD(changes.return.current)}</b> ${diffEmoji} ${formatDiffUSD(changes.return.diff)}\n\n`;
+  } else if (result.returnPrice) {
+    msg += `🛬 <b>טיסת חזור</b> (${result.returnHebrew})\n`;
+    msg += `   📅 ${result.returnDate}\n`;
+    msg += `   💵 ${formatUSD(result.returnPrice)} (ללא שינוי)\n\n`;
+  }
+
+  msg += `━━━━━━━━━━━━━━━\n`;
+  msg += `💰 <b>סה"כ:</b>\n`;
+  msg += `   💵 <b>${formatUSD(result.totalUSD)}</b>\n`;
+  msg += `   💴 <b>${formatILS(result.totalILS)}</b>\n`;
+
+  if (changes.total) {
+    const diffEmoji = changes.total.diffUSD > 0 ? "🔺" : "🔻";
+    msg += `   ${diffEmoji} הפרש: ${formatDiffUSD(changes.total.diffUSD)}\n`;
   }
 
   msg += `\n━━━━━━━━━━━━━━━\n`;
@@ -313,17 +313,7 @@ function buildStatusMessage(results) {
   msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const result of results) {
-    msg += `🛫 <b>${result.routeHebrew}</b>\n`;
-    msg += `📅 ${result.dates}\n\n`;
-
-    if (result.flights.length === 0) {
-      msg += `   ⚠️ לא נמצאו טיסות זמינות\n\n`;
-      continue;
-    }
-
-    for (const flight of result.flights) {
-      msg += `   ✈️ ${flight.name}: <b>${formatPrice(flight.price, flight.currency)}</b>\n`;
-    }
+    msg += buildPriceBlock(result);
     msg += `\n🔗 <a href="${result.url}">להזמנה</a>\n`;
     msg += `━━━━━━━━━━━━━━━\n\n`;
   }
@@ -340,18 +330,7 @@ function buildFirstRunMessage(results) {
   msg += `━━━━━━━━━━━━━━━\n\n`;
 
   for (const result of results) {
-    msg += `🛫 <b>${result.routeHebrew}</b>\n`;
-    msg += `📅 ${result.dates}\n\n`;
-
-    if (result.flights.length === 0) {
-      msg += `   ⚠️ לא נמצאו טיסות זמינות\n`;
-      msg += `   (ייתכן שהדף לא נטען כראוי - נסה שוב)\n\n`;
-      continue;
-    }
-
-    for (const flight of result.flights) {
-      msg += `   ✈️ ${flight.name}: <b>${formatPrice(flight.price, flight.currency)}</b>\n`;
-    }
+    msg += buildPriceBlock(result);
     msg += `\n🔗 <a href="${result.url}">להזמנה</a>\n`;
     msg += `━━━━━━━━━━━━━━━\n\n`;
   }
@@ -417,7 +396,7 @@ async function main() {
       const prev = prevMap.get(result.id);
       const changes = compareSearchResults(result, prev);
 
-      if (changes.length > 0) {
+      if (changes) {
         hasChanges = true;
         const msg = buildChangeMessage(result, changes);
         await sendTelegramMessage(msg);
